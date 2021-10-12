@@ -55,6 +55,7 @@ enum TokenKind {
 #[derive(Debug)]
 enum TokenLiteral {
     Null,
+    String(String),
 }
 
 #[derive(Debug)]
@@ -184,8 +185,30 @@ impl Scanner {
             '\n' => {
                 self.line += 1;
             }
+            '"' => self.string(),
             _ => self.error(&format!("Unexpected character: {}", token)),
         }
+    }
+
+    fn string(&mut self) {
+        while self.peek() != '"' && !self.at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+        if self.at_end() {
+            self.error("Unterminated string.");
+            return;
+        }
+
+        // Closing "
+        self.advance();
+
+        self.add_token_with_value(
+            TokenKind::String,
+            TokenLiteral::String(self.source[self.start as usize + 1..self.current as usize - 1].to_string()),
+        )
     }
 
     fn peek(&self) -> char {
@@ -250,6 +273,11 @@ pub fn run(script: &str) -> Vec<ScannerError> {
 mod tests {
     use super::*;
 
+    fn input_has_errors(input: &str) {
+        let errors = run(input);
+        assert!(errors.len() > 0);
+    }
+
     fn input_no_errors(input: &str) {
         let errors = run(input);
         for error in &errors {
@@ -289,5 +317,15 @@ mod tests {
 ()
 // Comment",
         );
+    }
+
+    #[test]
+    pub fn strings() {
+        input_no_errors("\"asdf fdsa {!/)\"");
+    }
+
+    #[test]
+    pub fn unterminated_strings() {
+        input_has_errors("\"asdf fdsa");
     }
 }
