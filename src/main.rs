@@ -1,3 +1,4 @@
+mod expressions;
 pub mod interpreter;
 pub mod tokens;
 mod utils;
