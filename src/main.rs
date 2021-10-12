@@ -4,16 +4,22 @@ mod utils;
 use std::{env, fs};
 use utils::die;
 
+fn run_line_and_print(text: &str) {
+    let (tokens, errors) = interpreter::run(&text);
+
+    for token in tokens {
+        println!("{:?}", token);
+    }
+    println!("");
+    for error in errors {
+        println!("{}", error);
+    }
+}
+
 fn run_file(path: &str) {
     let file = fs::read_to_string(path);
     match file {
-        Ok(file) => {
-            let errors = interpreter::run(&file);
-            for error in errors {
-                println!("{}", error);
-                die("");
-            }
-        }
+        Ok(file) => run_line_and_print(&file),
         Err(err) => die(&format!("Unable to read {} due to {}", path, err)),
     }
 }
@@ -24,16 +30,11 @@ fn run_prompt() {
 
     loop {
         println!("> ");
-        line.clear();
         match stdin.read_line(&mut line) {
-            Ok(_) => {
-                let errors = interpreter::run(&line);
-                for error in errors {
-                    println!("{}", error);
-                }
-            }
+            Ok(_) => run_line_and_print(&line),
             Err(err) => die(&format!("Error reading console due to {}", err)),
         }
+        line.clear();
     }
 }
 

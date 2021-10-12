@@ -1,8 +1,8 @@
 use std::fmt::{Debug, Display};
 
 #[allow(dead_code)]
-#[derive(Debug)]
-enum TokenKind {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenKind {
     // Single-character tokens.
     LeftParen,
     RightParen,
@@ -52,14 +52,15 @@ enum TokenKind {
     EOF,
 }
 
-#[derive(Debug)]
-enum TokenLiteral {
+#[derive(Debug, Clone)]
+pub enum TokenLiteral {
     Null,
     String(String),
+    Number(f64),
 }
 
-#[derive(Debug)]
-struct Token {
+#[derive(Debug, Clone)]
+pub struct Token {
     kind: TokenKind,
     lexme: String,
     literal: TokenLiteral,
@@ -186,7 +187,32 @@ impl Scanner {
                 self.line += 1;
             }
             '"' => self.string(),
-            _ => self.error(&format!("Unexpected character: {}", token)),
+            _ => {
+                if token.is_ascii_digit() {
+                    self.number()
+                } else {
+                    self.error(&format!("Unexpected character: {}", token));
+                }
+            }
+        }
+    }
+
+    fn number(&mut self) {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+            // Consume .
+            self.advance();
+
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
+        }
+        let value = self.source[self.start as usize..self.current as usize].to_string();
+        match value.parse::<f64>() {
+            Ok(v) => self.add_token_with_value(TokenKind::Number, TokenLiteral::Number(v)),
+            Err(_) => self.error(&format!("Invalid number: {}", value)),
         }
     }
 
@@ -216,6 +242,14 @@ impl Scanner {
             '\0'
         } else {
             self.current_char()
+        }
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() as u32 {
+            '\0'
+        } else {
+            self.source.as_bytes()[(self.current + 1) as usize] as char
         }
     }
 
@@ -260,30 +294,35 @@ impl Scanner {
     }
 }
 
-pub fn run(script: &str) -> Vec<ScannerError> {
+pub fn run(script: &str) -> (Vec<Token>, Vec<ScannerError>) {
     let mut scanner = Scanner::init(script);
     let (tokens, errors) = scanner.scan_tokens();
-    for token in tokens {
-        println!("{:?}", token);
-    }
-    errors.clone()
+    (tokens.clone(), errors.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn input_has_errors(input: &str) {
-        let errors = run(input);
+    fn input_has_errors(input: &str) -> Vec<Token> {
+        let (tokens, errors) = run(input);
         assert!(errors.len() > 0);
+        tokens
     }
 
-    fn input_no_errors(input: &str) {
-        let errors = run(input);
+    fn input_no_errors(input: &str) -> Vec<Token> {
+        let (tokens, errors) = run(input);
         for error in &errors {
             println!("{}", error);
         }
         assert_eq!(0, errors.len(), "On input: '{}'", input);
+        tokens
+    }
+
+    fn matches_tokens(tokens: &Vec<Token>, expected: &[TokenKind]) {
+        for (i, token) in tokens.iter().enumerate() {
+            assert_eq!(token.kind, expected[i]);
+        }
     }
 
     #[test]
@@ -302,12 +341,23 @@ mod tests {
 
     #[test]
     pub fn comment() {
-        input_no_errors("{}// Hello World");
+        let tokens = input_no_errors("{}// Hello World");
+        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EOF]);
     }
 
     #[test]
     pub fn spaces() {
-        input_no_errors("{} ()  // Comment");
+        let tokens = input_no_errors("{} ()  // Comment");
+        matches_tokens(
+            &tokens,
+            &[
+                TokenKind::LeftBrace,
+                TokenKind::RightBrace,
+                TokenKind::LeftParen,
+                TokenKind::RightParen,
+                TokenKind::EOF,
+            ],
+        );
     }
 
     #[test]
@@ -321,11 +371,29 @@ mod tests {
 
     #[test]
     pub fn strings() {
-        input_no_errors("\"asdf fdsa {!/)\"");
+        let tokens = input_no_errors("\"asdf fdsa {!/)\"");
+        matches_tokens(&tokens, &[TokenKind::String, TokenKind::EOF]);
     }
 
     #[test]
     pub fn unterminated_strings() {
         input_has_errors("\"asdf fdsa");
+    }
+
+    #[test]
+    pub fn numbers() {
+        for n in &["1234", "12.34"] {
+            let tokens = input_no_errors(n);
+            matches_tokens(&tokens, &[TokenKind::Number, TokenKind::EOF]);
+        }
+    }
+
+    #[test]
+    pub fn trailing_point_numbers_are_seperate() {
+        let tokens = input_no_errors(".1234");
+        matches_tokens(&tokens, &[TokenKind::Dot, TokenKind::Number, TokenKind::EOF]);
+
+        let tokens = input_no_errors("1234.");
+        matches_tokens(&tokens, &[TokenKind::Number, TokenKind::Dot, TokenKind::EOF]);
     }
 }
