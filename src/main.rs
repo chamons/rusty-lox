@@ -1,5 +1,6 @@
 mod expressions;
 pub mod interpreter;
+mod parser;
 pub mod tokens;
 mod utils;
 

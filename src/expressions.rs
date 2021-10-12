@@ -52,9 +52,10 @@ pub fn print_tree(root: ChildExpression, buf: &mut String) {
                 write!(buf, ")").unwrap();
             }
             Expression::Literal { value } => match value {
-                TokenLiteral::Null => write!(buf, "nil").unwrap(),
+                TokenLiteral::Nil => write!(buf, "nil").unwrap(),
                 TokenLiteral::String(v) => write!(buf, "{}", v).unwrap(),
                 TokenLiteral::Number(v) => write!(buf, "{}", v).unwrap(),
+                TokenLiteral::Boolean(v) => write!(buf, "{}", v).unwrap(),
             },
             Expression::Unary { operator, right } => {
                 write!(buf, "{:?} ", operator.kind).unwrap();
@@ -70,7 +71,7 @@ mod tests {
     use crate::tokens::TokenKind;
 
     fn create_test_token(kind: TokenKind) -> Token {
-        Token::init(kind, "", TokenLiteral::Null, 0)
+        Token::init(kind, "", TokenLiteral::Nil, 0)
     }
 
     #[test]

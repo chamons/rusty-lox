@@ -56,9 +56,10 @@ pub enum TokenKind {
 
 #[derive(Debug, Clone)]
 pub enum TokenLiteral {
-    Null,
+    Nil,
     String(String),
     Number(f64),
+    Boolean(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -130,7 +131,7 @@ impl Scanner {
             self.start = self.current;
             self.scan_token();
         }
-        self.tokens.push(Token::init(TokenKind::EOF, "", TokenLiteral::Null, self.line));
+        self.tokens.push(Token::init(TokenKind::EOF, "", TokenLiteral::Nil, self.line));
         (&self.tokens, &self.errors)
     }
 
@@ -297,7 +298,7 @@ impl Scanner {
     }
 
     fn add_token(&mut self, kind: TokenKind) {
-        self.add_token_with_value(kind, TokenLiteral::Null)
+        self.add_token_with_value(kind, TokenLiteral::Nil)
     }
 
     fn add_token_with_value(&mut self, kind: TokenKind, literal: TokenLiteral) {
