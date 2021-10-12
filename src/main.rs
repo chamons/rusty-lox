@@ -1,4 +1,5 @@
-mod interpreter;
+pub mod interpreter;
+pub mod tokens;
 mod utils;
 
 #[macro_use]
