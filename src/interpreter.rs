@@ -180,6 +180,10 @@ impl Scanner {
                     self.add_token(TokenKind::Slash);
                 }
             }
+            ' ' | '\r' | '\t' => {}
+            '\n' => {
+                self.line += 1;
+            }
             _ => self.error(&format!("Unexpected character: {}", token)),
         }
     }
@@ -262,12 +266,28 @@ mod tests {
     }
 
     #[test]
+    pub fn multi_token() {
+        for c in ["!=", "==", "<=", ">=", "//"] {
+            input_no_errors(&format!("{}", c));
+        }
+    }
+
+    #[test]
     pub fn comment() {
         input_no_errors("{}// Hello World");
     }
 
-    // #[test]
-    // pub fn spaces() {
-    //     input_no_errors("{} () // Comment");
-    // }
+    #[test]
+    pub fn spaces() {
+        input_no_errors("{} ()  // Comment");
+    }
+
+    #[test]
+    pub fn input_multiple_lines() {
+        input_no_errors(
+            "{}
+()
+// Comment",
+        );
+    }
 }
