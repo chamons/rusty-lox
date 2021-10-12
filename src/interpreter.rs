@@ -200,7 +200,9 @@ impl Scanner {
                 }
             }
             '/' => {
-                if self.match_token('/') {
+                if self.match_token('*') {
+                    self.c_style_comment();
+                } else if self.match_token('/') {
                     while self.peek() != '\n' && !self.at_end() {
                         self.advance();
                     }
@@ -254,6 +256,22 @@ impl Scanner {
             Ok(v) => self.add_token_with_value(TokenKind::Number, TokenLiteral::Number(v)),
             Err(_) => self.error(&format!("Invalid number: {}", text)),
         }
+    }
+
+    fn c_style_comment(&mut self) {
+        while !(self.peek() == '*' && self.peek_next() == '/') && !self.at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+        if self.at_end() {
+            self.error("Unterminated comment.");
+            return;
+        }
+        // Closing */
+        self.advance();
+        self.advance();
     }
 
     fn string(&mut self) {
@@ -456,5 +474,40 @@ mod tests {
     pub fn reserved_words_inside_identifiers() {
         let tokens = input_no_errors("\"orchid\"");
         matches_tokens(&tokens, &[TokenKind::String, TokenKind::EOF]);
+    }
+
+    #[test]
+    pub fn c_style_comment() {
+        let tokens = input_no_errors("{}/* Hello World*/ ()");
+        matches_tokens(
+            &tokens,
+            &[
+                TokenKind::LeftBrace,
+                TokenKind::RightBrace,
+                TokenKind::LeftParen,
+                TokenKind::RightParen,
+                TokenKind::EOF,
+            ],
+        );
+    }
+
+    #[test]
+    pub fn c_style_comment_multiple_lines() {
+        let tokens = input_no_errors(
+            "{}/* Hello World
+
+*/",
+        );
+        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EOF]);
+    }
+
+    #[test]
+    pub fn c_style_comment_multiple_lines_not_terminated() {
+        let tokens = input_has_errors(
+            "{}/* Hello 
+            
+World",
+        );
+        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EOF]);
     }
 }
