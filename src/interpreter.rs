@@ -131,7 +131,8 @@ impl Scanner {
     }
 
     fn scan_token(&mut self) {
-        match self.advance() {
+        let token = self.advance();
+        match token {
             '(' => self.add_token(TokenKind::LeftParen),
             ')' => self.add_token(TokenKind::RightParen),
             '{' => self.add_token(TokenKind::LeftBrace),
@@ -142,7 +143,61 @@ impl Scanner {
             '+' => self.add_token(TokenKind::Plus),
             ';' => self.add_token(TokenKind::Semicolon),
             '*' => self.add_token(TokenKind::Star),
-            token @ _ => self.error(&format!("Unexpected character: {}", token)),
+            '!' => {
+                if self.match_token('=') {
+                    self.add_token(TokenKind::BangEqual)
+                } else {
+                    self.add_token(TokenKind::Bang)
+                }
+            }
+            '=' => {
+                if self.match_token('=') {
+                    self.add_token(TokenKind::EqualEqual)
+                } else {
+                    self.add_token(TokenKind::Equal)
+                }
+            }
+            '<' => {
+                if self.match_token('=') {
+                    self.add_token(TokenKind::LessEqual)
+                } else {
+                    self.add_token(TokenKind::Less)
+                }
+            }
+            '>' => {
+                if self.match_token('=') {
+                    self.add_token(TokenKind::GreaterEqual)
+                } else {
+                    self.add_token(TokenKind::Greater)
+                }
+            }
+            '/' => {
+                if self.match_token('/') {
+                    while self.peek() != '\n' && !self.at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(TokenKind::Slash);
+                }
+            }
+            _ => self.error(&format!("Unexpected character: {}", token)),
+        }
+    }
+
+    fn peek(&self) -> char {
+        if self.at_end() {
+            '\0'
+        } else {
+            self.current_char()
+        }
+    }
+
+    fn match_token(&mut self, expected: char) -> bool {
+        if self.at_end() || self.current_char() != expected {
+            false
+        } else {
+            self.current += 1;
+            true
         }
     }
 
@@ -155,8 +210,12 @@ impl Scanner {
         self.tokens.push(Token::init(kind, &text, literal, self.line));
     }
 
+    fn current_char(&self) -> char {
+        self.source.as_bytes()[self.current as usize] as char
+    }
+
     fn advance(&mut self) -> char {
-        let value = self.source.as_bytes()[self.current as usize];
+        let value = self.current_char();
         self.current += 1;
         value as char
     }
@@ -181,4 +240,34 @@ pub fn run(script: &str) -> Vec<ScannerError> {
         println!("{:?}", token);
     }
     errors.clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input_no_errors(input: &str) {
+        let errors = run(input);
+        for error in &errors {
+            println!("{}", error);
+        }
+        assert_eq!(0, errors.len(), "On input: '{}'", input);
+    }
+
+    #[test]
+    pub fn single_token() {
+        for c in ['(', ')', '{', '}', ',', '.', '-', '+', ';', '*', '!', '=', '<', '>', '/'] {
+            input_no_errors(&format!("{}", c));
+        }
+    }
+
+    #[test]
+    pub fn comment() {
+        input_no_errors("{}// Hello World");
+    }
+
+    // #[test]
+    // pub fn spaces() {
+    //     input_no_errors("{} () // Comment");
+    // }
 }
