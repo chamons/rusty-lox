@@ -1,6 +1,9 @@
 mod interpreter;
 mod utils;
 
+#[macro_use]
+extern crate lazy_static;
+
 use std::{env, fs};
 use utils::die;
 

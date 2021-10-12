@@ -1,4 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +104,29 @@ impl Display for ScannerError {
     }
 }
 
+lazy_static! {
+    static ref KEYWORDS: HashMap<&'static str, TokenKind> = {
+        let mut m = HashMap::new();
+        m.insert("and", TokenKind::And);
+        m.insert("class", TokenKind::Class);
+        m.insert("else", TokenKind::Else);
+        m.insert("false", TokenKind::False);
+        m.insert("for", TokenKind::For);
+        m.insert("fun", TokenKind::Fun);
+        m.insert("if", TokenKind::If);
+        m.insert("nil", TokenKind::Nil);
+        m.insert("or", TokenKind::Or);
+        m.insert("print", TokenKind::Print);
+        m.insert("return", TokenKind::Return);
+        m.insert("super", TokenKind::Super);
+        m.insert("this", TokenKind::This);
+        m.insert("true", TokenKind::True);
+        m.insert("var", TokenKind::Var);
+        m.insert("while", TokenKind::While);
+        m
+    };
+}
+
 #[derive(Debug)]
 struct Scanner {
     source: String,
@@ -190,11 +216,25 @@ impl Scanner {
             _ => {
                 if token.is_ascii_digit() {
                     self.number()
+                } else if token.is_ascii_alphabetic() {
+                    self.identifier();
                 } else {
                     self.error(&format!("Unexpected character: {}", token));
                 }
             }
         }
+    }
+
+    fn identifier(&mut self) {
+        while self.peek().is_ascii_alphanumeric() {
+            self.advance();
+        }
+        let text = self.source[self.start as usize..self.current as usize].to_string();
+        let kind = match KEYWORDS.get(&*text) {
+            Some(keyword) => keyword.clone(),
+            None => TokenKind::Identifier,
+        };
+        self.add_token(kind);
     }
 
     fn number(&mut self) {
@@ -209,10 +249,10 @@ impl Scanner {
                 self.advance();
             }
         }
-        let value = self.source[self.start as usize..self.current as usize].to_string();
-        match value.parse::<f64>() {
+        let text = self.source[self.start as usize..self.current as usize].to_string();
+        match text.parse::<f64>() {
             Ok(v) => self.add_token_with_value(TokenKind::Number, TokenLiteral::Number(v)),
-            Err(_) => self.error(&format!("Invalid number: {}", value)),
+            Err(_) => self.error(&format!("Invalid number: {}", text)),
         }
     }
 
@@ -395,5 +435,26 @@ mod tests {
 
         let tokens = input_no_errors("1234.");
         matches_tokens(&tokens, &[TokenKind::Number, TokenKind::Dot, TokenKind::EOF]);
+    }
+
+    #[test]
+    pub fn reserved_words() {
+        for c in &[
+            "and", "class", "else", "false", "for", "fun", "if", "nil", "or", "print", "return", "super", "this", "true", "var", "while",
+        ] {
+            input_no_errors(&format!("{}", c));
+        }
+    }
+
+    #[test]
+    pub fn identifer() {
+        let tokens = input_no_errors("orchid");
+        matches_tokens(&tokens, &[TokenKind::Identifier, TokenKind::EOF]);
+    }
+
+    #[test]
+    pub fn reserved_words_inside_identifiers() {
+        let tokens = input_no_errors("\"orchid\"");
+        matches_tokens(&tokens, &[TokenKind::String, TokenKind::EOF]);
     }
 }
