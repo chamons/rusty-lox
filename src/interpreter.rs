@@ -2,8 +2,10 @@ use std::fmt;
 
 use float_cmp::approx_eq;
 
+use crate::environment::Environment;
 use crate::expressions::*;
 use crate::parser::*;
+use crate::statements::*;
 use crate::tokens::*;
 
 #[derive(Debug, Clone)]
@@ -68,10 +70,11 @@ pub fn is_truthy(value: &InterpreterLiteral) -> bool {
     }
 }
 
-struct Interpreter<T>
+pub struct Interpreter<T>
 where
     T: FnMut(&InterpreterLiteral),
 {
+    environment: Environment,
     print: T,
 }
 
@@ -80,7 +83,10 @@ where
     T: FnMut(&InterpreterLiteral),
 {
     pub fn init(print: T) -> Self {
-        Interpreter { print }
+        Interpreter {
+            print,
+            environment: Environment::init(),
+        }
     }
 
     pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
@@ -116,7 +122,15 @@ where
         }
     }
 
-    pub fn execute_variable_statement(&mut self, _name: &Token, _initializer: &Option<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_variable_statement(&mut self, name: &Token, initializer: &Option<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
+        let value = if let Some(initializer) = initializer {
+            self.execute_expression(initializer)?
+        } else {
+            InterpreterLiteral::Nil
+        };
+
+        self.environment.define(&name.lexme, value);
+
         Ok(InterpreterLiteral::Nil)
     }
 
@@ -160,7 +174,10 @@ where
                 Expression::Grouping { expression } => self.execute_grouping(&expression),
                 Expression::Literal { value } => self.execute_literal(&value),
                 Expression::Unary { operator, right } => self.execute_unary(&operator, &right),
-                Expression::Variable { name: _ } => Ok(InterpreterLiteral::Nil),
+                Expression::Variable { name } => match self.environment.get(&name.lexme) {
+                    Some(v) => Ok(v.clone()),
+                    None => Err(""),
+                },
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -180,13 +197,15 @@ where
     }
 }
 
-pub fn run(script: &str) {
+pub fn run_script(script: &str) {
     let mut scanner = Scanner::init(script);
     let (tokens, errors) = scanner.scan_tokens();
     if errors.len() > 0 {
+        for e in errors {
+            println!("{}", e);
+        }
         return;
     }
-
     let mut parser = Parser::init(tokens);
     match parser.parse() {
         Ok(statements) => {
