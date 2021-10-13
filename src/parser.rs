@@ -202,13 +202,23 @@ mod tests {
     fn parse_mismatched_braces() {
         parses_with_errors("(");
         parses_with_errors("-(1 + 2");
-        // TODO
-        //parses_with_errors("-1 + 2)");
-        //parses_with_errors(")");
+        // TODO - Need statement support to detect? We seem to eager
+        // parses_with_errors("2)");
+        // parses_with_errors(")");
     }
 
     #[test]
     fn parse_leading_op() {
         parses_with_errors("+ 2");
+    }
+
+    #[test]
+    fn parse_equality_and_comparisions() {
+        parses_without_errors("2 == 3");
+        parses_without_errors("2 != 3");
+        parses_without_errors("2 <= 3");
+        parses_without_errors("2 < 3");
+        parses_without_errors("2 => 3");
+        parses_without_errors("2 > 3");
     }
 }
