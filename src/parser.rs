@@ -1,25 +1,36 @@
 use crate::expressions::*;
 use crate::tokens::{Token, TokenKind, TokenLiteral};
 
-struct Parser {
+pub struct Parser {
     tokens: Vec<Token>,
     current: u32,
 }
 
 impl Parser {
-    fn expression(&mut self) -> ChildExpression {
-        return self.equality();
+    pub fn init(tokens: &Vec<Token>) -> Self {
+        Parser {
+            tokens: tokens.clone(), // TODO - Tokens could be not cloned with lifetime work
+            current: 0,
+        }
     }
 
-    fn equality(&mut self) -> ChildExpression {
-        let mut expr = self.comparison();
+    pub fn parse(&mut self) -> Result<ChildExpression, &'static str> {
+        self.expression()
+    }
+
+    fn expression(&mut self) -> Result<ChildExpression, &'static str> {
+        Ok(self.equality()?)
+    }
+
+    fn equality(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.comparison()?;
 
         while self.match_tokens(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
             let operator = self.previous().clone();
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = create_binary(expr, operator, right);
         }
-        expr
+        Ok(expr)
     }
 
     fn match_token(&mut self, kind: TokenKind) -> bool {
@@ -63,70 +74,141 @@ impl Parser {
         self.tokens.get((self.current - 1) as usize).unwrap()
     }
 
-    fn comparison(&mut self) -> ChildExpression {
-        let mut expr = self.term();
+    fn comparison(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.term()?;
         while self.match_tokens(&[TokenKind::Greater, TokenKind::GreaterEqual, TokenKind::Less, TokenKind::LessEqual]) {
             let operator = self.previous().clone();
-            let right = self.term();
+            let right = self.term()?;
             expr = create_binary(expr, operator, right);
         }
-        expr
+        Ok(expr)
     }
 
-    fn term(&mut self) -> ChildExpression {
-        let mut expr = self.factor();
+    fn term(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.factor()?;
         while self.match_tokens(&[TokenKind::Minus, TokenKind::Plus]) {
             let operator = self.previous().clone();
-            let right = self.factor();
+            let right = self.factor()?;
             expr = create_binary(expr, operator, right);
         }
-        expr
+        Ok(expr)
     }
 
-    fn factor(&mut self) -> ChildExpression {
-        let mut expr = self.unary();
+    fn factor(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.unary()?;
 
         while self.match_tokens(&[TokenKind::Slash, TokenKind::Star]) {
             let operator = self.previous().clone();
-            let right = self.unary();
+            let right = self.unary()?;
             expr = create_binary(expr, operator, right);
         }
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> ChildExpression {
+    fn unary(&mut self) -> Result<ChildExpression, &'static str> {
         if self.match_tokens(&[TokenKind::Bang, TokenKind::Minus]) {
             let operator = self.previous().clone();
-            let right = self.unary();
-            create_unary(operator, right)
+            let right = self.unary()?;
+            Ok(create_unary(operator, right))
         } else {
             self.primary()
         }
     }
 
-    fn primary(&mut self) -> ChildExpression {
+    fn primary(&mut self) -> Result<ChildExpression, &'static str> {
         if self.match_token(TokenKind::False) {
-            create_literal(TokenLiteral::Boolean(false))
+            Ok(create_literal(TokenLiteral::Boolean(false)))
         } else if self.match_token(TokenKind::True) {
-            create_literal(TokenLiteral::Boolean(true))
+            Ok(create_literal(TokenLiteral::Boolean(true)))
         } else if self.match_token(TokenKind::Nil) {
-            create_literal(TokenLiteral::Nil)
+            Ok(create_literal(TokenLiteral::Nil))
         } else if self.match_tokens(&[TokenKind::Number, TokenKind::String]) {
-            create_literal(self.previous().literal.clone())
+            Ok(create_literal(self.previous().literal.clone()))
         } else {
             if self.match_token(TokenKind::LeftParen) {
-                let expr = self.expression();
-                self.consume(TokenKind::RightParen, "Expect ')' after expression");
-                create_grouping(expr)
+                let expr = self.expression()?;
+                self.consume(TokenKind::RightParen, "Expect ')' after expression")?;
+                Ok(create_grouping(expr))
             } else {
-                // Fix
-                panic!();
+                Err("Expect expression.")
             }
         }
     }
 
-    // https://craftinginterpreters.com/parsing-expressions.html#entering-panic-mode
-    fn consume(&mut self, kind: TokenKind, message: &str) {
-        //Fix
+    fn consume(&mut self, kind: TokenKind, message: &'static str) -> Result<&Token, &'static str> {
+        if self.check(&kind) {
+            Ok(self.advance())
+        } else {
+            Err(message)
+        }
+    }
+
+    #[allow(dead_code)]
+    fn synchronize(&mut self) {
+        self.advance();
+
+        while !self.at_end() {
+            if self.previous().kind == TokenKind::Semicolon {
+                return;
+            }
+
+            match self.peek().kind {
+                TokenKind::Class
+                | TokenKind::Fun
+                | TokenKind::Var
+                | TokenKind::For
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Print
+                | TokenKind::Return => {
+                    return;
+                }
+                _ => {}
+            }
+            self.advance();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parser::Parser, tokens::Scanner};
+
+    fn create_parser(script: &str) -> Parser {
+        let mut scanner = Scanner::init(script);
+        let (tokens, errors) = scanner.scan_tokens();
+        assert_eq!(0, errors.len());
+
+        Parser::init(tokens)
+    }
+
+    fn parses_without_errors(script: &str) {
+        let mut parser = create_parser(script);
+        assert!(parser.parse().is_ok());
+    }
+
+    fn parses_with_errors(script: &str) {
+        let mut parser = create_parser(script);
+        assert!(parser.parse().is_err());
+    }
+
+    #[test]
+    fn parse_simple_expression() {
+        parses_without_errors("1 + 2");
+        parses_without_errors("-(1 + 2) * 4 / (4 + 1 - 2.3)");
+    }
+
+    #[test]
+    fn parse_mismatched_braces() {
+        parses_with_errors("(");
+        parses_with_errors("-(1 + 2");
+        // TODO
+        //parses_with_errors("-1 + 2)");
+        //parses_with_errors(")");
+    }
+
+    #[test]
+    fn parse_leading_op() {
+        parses_with_errors("+ 2");
     }
 }

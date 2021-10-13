@@ -38,17 +38,23 @@ pub fn create_unary(operator: Token, right: ChildExpression) -> ChildExpression 
     Some(Box::new(Expression::Unary { operator, right }))
 }
 
-pub fn print_tree(root: ChildExpression, buf: &mut String) {
+pub fn print_tree(root: ChildExpression) -> String {
+    let mut buf = String::new();
+    print_tree_core(root, &mut buf);
+    buf
+}
+
+fn print_tree_core(root: ChildExpression, buf: &mut String) {
     if let Some(root) = root {
         match *root {
             Expression::Binary { left, operator, right } => {
-                print_tree(left, buf);
+                print_tree_core(left, buf);
                 write!(buf, " {:?} ", operator.kind).unwrap();
-                print_tree(right, buf);
+                print_tree_core(right, buf);
             }
             Expression::Grouping { expression } => {
                 write!(buf, "(").unwrap();
-                print_tree(expression, buf);
+                print_tree_core(expression, buf);
                 write!(buf, ")").unwrap();
             }
             Expression::Literal { value } => match value {
@@ -59,7 +65,7 @@ pub fn print_tree(root: ChildExpression, buf: &mut String) {
             },
             Expression::Unary { operator, right } => {
                 write!(buf, "{:?} ", operator.kind).unwrap();
-                print_tree(right, buf);
+                print_tree_core(right, buf);
             }
         }
     }
@@ -84,8 +90,6 @@ mod tests {
                 create_literal(TokenLiteral::Number(2.0)),
             )),
         );
-        let mut buf = String::new();
-        print_tree(root, &mut buf);
-        assert_eq!("Minus (1 Plus 2)", buf);
+        assert_eq!("Minus (1 Plus 2)", print_tree(root));
     }
 }

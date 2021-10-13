@@ -329,15 +329,14 @@ impl Scanner {
     }
 }
 
-pub fn run(script: &str) -> (Vec<Token>, Vec<ScannerError>) {
-    let mut scanner = Scanner::init(script);
-    let (tokens, errors) = scanner.scan_tokens();
-    (tokens.clone(), errors.clone())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn run(script: &str) -> (Vec<Token>, Vec<ScannerError>) {
+        let mut scanner = Scanner::init(script);
+        let (tokens, errors) = scanner.scan_tokens();
+        (tokens.clone(), errors.clone())
+    }
 
     fn input_has_errors(input: &str) -> Vec<Token> {
         let (tokens, errors) = run(input);
