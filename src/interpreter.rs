@@ -68,29 +68,31 @@ pub fn is_truthy(value: &InterpreterLiteral) -> bool {
     }
 }
 
-struct Interpreter<'a, T>
+struct Interpreter<T>
 where
     T: FnMut(&InterpreterLiteral),
 {
-    root: &'a ChildExpression,
     print: T,
 }
 
-impl<'a, T> Interpreter<'a, T>
+impl<T> Interpreter<T>
 where
     T: FnMut(&InterpreterLiteral),
 {
-    pub fn init(root: &'a ChildExpression, print: T) -> Self {
-        Interpreter { root, print }
+    pub fn init(print: T) -> Self {
+        Interpreter { print }
     }
 
-    pub fn execute(&mut self) -> Result<InterpreterLiteral, &'static str> {
-        self.execute_node(&self.root)
+    pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
+        for statement in statements {
+            self.execute_statement(&statement)?;
+        }
+        Ok(())
     }
 
     pub fn execute_binary(&mut self, left: &ChildExpression, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        let left = self.execute_node(left)?;
-        let right = self.execute_node(right)?;
+        let left = self.execute_expression(left)?;
+        let right = self.execute_expression(right)?;
         match operator.kind {
             TokenKind::Plus => {
                 if matches!(left, InterpreterLiteral::Number(_)) && matches!(right, InterpreterLiteral::Number(_)) {
@@ -114,19 +116,23 @@ where
         }
     }
 
+    pub fn execute_variable_statement(&mut self, _name: &Token, _initializer: &Option<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
+        Ok(InterpreterLiteral::Nil)
+    }
+
     pub fn execute_print_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        let value = self.execute_node(expression)?;
+        let value = self.execute_expression(expression)?;
         (self.print)(&value);
         Ok(InterpreterLiteral::Nil)
     }
 
     pub fn execute_expression_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        self.execute_node(expression)?;
+        self.execute_expression(expression)?;
         Ok(InterpreterLiteral::Nil)
     }
 
     pub fn execute_grouping(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        self.execute_node(expression)
+        self.execute_expression(expression)
     }
 
     pub fn execute_literal(&mut self, value: &TokenLiteral) -> Result<InterpreterLiteral, &'static str> {
@@ -139,7 +145,7 @@ where
     }
 
     pub fn execute_unary(&mut self, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        let right = self.execute_node(right)?;
+        let right = self.execute_expression(right)?;
         match operator.kind {
             TokenKind::Minus => Ok(InterpreterLiteral::Number(expect_literal(&right)? * -1.0)),
             TokenKind::Bang => Ok(InterpreterLiteral::Boolean(!is_truthy(&right))),
@@ -147,15 +153,26 @@ where
         }
     }
 
-    pub fn execute_node(&mut self, node: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_expression(&mut self, node: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
         if let Some(node) = node {
             match &**node {
                 Expression::Binary { left, operator, right } => self.execute_binary(&left, &operator, &right),
                 Expression::Grouping { expression } => self.execute_grouping(&expression),
                 Expression::Literal { value } => self.execute_literal(&value),
                 Expression::Unary { operator, right } => self.execute_unary(&operator, &right),
-                Expression::Expression { expression } => self.execute_expression_statement(&expression),
-                Expression::Print { expression } => self.execute_print_statement(&expression),
+                Expression::Variable { name: _ } => Ok(InterpreterLiteral::Nil),
+            }
+        } else {
+            Ok(InterpreterLiteral::Nil)
+        }
+    }
+
+    pub fn execute_statement(&mut self, node: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
+        if let Some(node) = node {
+            match &**node {
+                Statements::Expression { expression } => self.execute_expression_statement(&expression),
+                Statements::Print { expression } => self.execute_print_statement(&expression),
+                Statements::Variable { name, initializer } => self.execute_variable_statement(&name, &initializer),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -172,16 +189,13 @@ pub fn run(script: &str) {
 
     let mut parser = Parser::init(tokens);
     match parser.parse() {
-        Ok(expressions) => {
-            for expression in &expressions {
-                // println!("Tree: {}", print_tree(&expression));
-                let mut interpreter = Interpreter::init(&expression, |p| println!("{}", p));
-                match interpreter.execute() {
-                    Err(err) => {
-                        println!("Error: {}", err);
-                    }
-                    _ => {}
+        Ok(statements) => {
+            let mut interpreter = Interpreter::init(|p| println!("{}", p));
+            match interpreter.execute(&statements) {
+                Err(err) => {
+                    println!("Error: {}", err);
                 }
+                _ => {}
             }
         }
         Err(err) => {
@@ -214,11 +228,22 @@ mod tests {
         let mut parser = Parser::init(tokens);
         let parsed = parser.parse().unwrap();
         let mut value = None;
-        let mut interpreter = Interpreter::init(&parsed[0], |p| {
+        let mut interpreter = Interpreter::init(|p| {
             value = Some(p.clone());
         });
-        interpreter.execute()?;
+        interpreter.execute(&parsed)?;
         Ok(value.unwrap_or(InterpreterLiteral::Nil))
+    }
+
+    fn execute_no_redirect(script: &str) -> Result<(), &'static str> {
+        let mut scanner = Scanner::init(script);
+        let (tokens, errors) = scanner.scan_tokens();
+        assert_eq!(0, errors.len());
+
+        let mut parser = Parser::init(tokens);
+        let parsed = parser.parse().unwrap();
+        let mut interpreter = Interpreter::init(|_| {});
+        interpreter.execute(&parsed)
     }
 
     #[test]
@@ -279,5 +304,12 @@ mod tests {
         assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == nil").ok().unwrap());
         assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == \"3\"").ok().unwrap());
         assert_eq!(InterpreterLiteral::Boolean(true), execute("nil == nil").ok().unwrap());
+    }
+
+    #[test]
+    fn print() {
+        execute_no_redirect("print \"three\";").ok();
+        execute_no_redirect("print 3;").ok();
+        execute_no_redirect("print nil;").ok();
     }
 }

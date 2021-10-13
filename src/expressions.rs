@@ -1,9 +1,9 @@
-use std::fmt::Write;
-
 use crate::tokens::{Token, TokenLiteral};
 
 pub type ChildExpression = Option<Box<Expression>>;
+pub type ChildStatement = Option<Box<Statements>>;
 
+#[derive(Debug, Clone)]
 pub enum Expression {
     Binary {
         left: ChildExpression,
@@ -20,12 +20,16 @@ pub enum Expression {
         operator: Token,
         right: ChildExpression,
     },
-    Expression {
-        expression: ChildExpression,
+    Variable {
+        name: Token,
     },
-    Print {
-        expression: ChildExpression,
-    },
+}
+
+#[derive(Debug, Clone)]
+pub enum Statements {
+    Expression { expression: ChildExpression },
+    Print { expression: ChildExpression },
+    Variable { name: Token, initializer: Option<ChildExpression> },
 }
 
 pub fn create_binary(left: ChildExpression, operator: Token, right: ChildExpression) -> ChildExpression {
@@ -40,79 +44,22 @@ pub fn create_literal(value: TokenLiteral) -> ChildExpression {
     Some(Box::new(Expression::Literal { value }))
 }
 
-pub fn create_print_statement(expression: ChildExpression) -> ChildExpression {
-    Some(Box::new(Expression::Print { expression }))
-}
-
-pub fn create_expression_statement(expression: ChildExpression) -> ChildExpression {
-    Some(Box::new(Expression::Expression { expression }))
-}
-
 pub fn create_unary(operator: Token, right: ChildExpression) -> ChildExpression {
     Some(Box::new(Expression::Unary { operator, right }))
 }
 
-#[allow(dead_code)]
-pub fn print_tree(root: &ChildExpression) -> String {
-    let mut buf = String::new();
-    print_tree_core(root, &mut buf);
-    buf
+pub fn create_variable(name: Token) -> ChildExpression {
+    Some(Box::new(Expression::Variable { name }))
 }
 
-#[allow(dead_code)]
-fn print_tree_core(root: &ChildExpression, buf: &mut String) {
-    if let Some(root) = root {
-        match &**root {
-            Expression::Binary { left, operator, right } => {
-                print_tree_core(&left, buf);
-                write!(buf, " {:?} ", operator.kind).unwrap();
-                print_tree_core(&right, buf);
-            }
-            Expression::Grouping { expression } => {
-                write!(buf, "(").unwrap();
-                print_tree_core(&expression, buf);
-                write!(buf, ")").unwrap();
-            }
-            Expression::Literal { value } => match value {
-                TokenLiteral::Nil => write!(buf, "nil").unwrap(),
-                TokenLiteral::String(v) => write!(buf, "{}", v).unwrap(),
-                TokenLiteral::Number(v) => write!(buf, "{}", v).unwrap(),
-                TokenLiteral::Boolean(v) => write!(buf, "{}", v).unwrap(),
-            },
-            Expression::Unary { operator, right } => {
-                write!(buf, "{:?} ", operator.kind).unwrap();
-                print_tree_core(&right, buf);
-            }
-            Expression::Print { expression } => {
-                write!(buf, "Print ").unwrap();
-                print_tree_core(&expression, buf);
-            }
-            Expression::Expression { expression } => {
-                print_tree_core(&expression, buf);
-            }
-        }
-    }
+pub fn create_expression_statement(expression: ChildExpression) -> ChildStatement {
+    Some(Box::new(Statements::Expression { expression }))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tokens::TokenKind;
+pub fn create_print_statement(expression: ChildExpression) -> ChildStatement {
+    Some(Box::new(Statements::Print { expression }))
+}
 
-    fn create_test_token(kind: TokenKind) -> Token {
-        Token::init(kind, "", TokenLiteral::Nil, 0)
-    }
-
-    #[test]
-    pub fn print_complex_tree() {
-        let root = create_unary(
-            create_test_token(TokenKind::Minus),
-            create_grouping(create_binary(
-                create_literal(TokenLiteral::Number(1.0)),
-                create_test_token(TokenKind::Plus),
-                create_literal(TokenLiteral::Number(2.0)),
-            )),
-        );
-        assert_eq!("Minus (1 Plus 2)", print_tree(&root));
-    }
+pub fn create_variable_statement(name: Token, initializer: Option<ChildExpression>) -> ChildStatement {
+    Some(Box::new(Statements::Variable { name, initializer }))
 }

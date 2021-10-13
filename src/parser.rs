@@ -11,15 +11,36 @@ impl<'a> Parser<'a> {
         Parser { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<ChildExpression>, &'static str> {
+    pub fn parse(&mut self) -> Result<Vec<ChildStatement>, &'static str> {
         let mut statements = vec![];
         while !self.at_end() {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
         Ok(statements)
     }
 
-    fn statement(&mut self) -> Result<ChildExpression, &'static str> {
+    fn declaration(&mut self) -> Result<ChildStatement, &'static str> {
+        let result = if self.match_token(TokenKind::Var) {
+            self.variable_declaration()
+        } else {
+            self.statement()
+        };
+        if result.is_err() {
+            self.synchronize();
+        }
+        result
+    }
+
+    fn variable_declaration(&mut self) -> Result<ChildStatement, &'static str> {
+        let name = self.consume(TokenKind::Identifier, "Expect variable name.")?.clone();
+
+        let initializer = if self.match_token(TokenKind::Equal) { Some(self.expression()?) } else { None };
+        self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
+
+        Ok(create_variable_statement(name.clone(), initializer))
+    }
+
+    fn statement(&mut self) -> Result<ChildStatement, &'static str> {
         if self.match_token(TokenKind::Print) {
             self.print_statement()
         } else {
@@ -27,13 +48,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn print_statement(&mut self) -> Result<ChildExpression, &'static str> {
+    fn print_statement(&mut self) -> Result<ChildStatement, &'static str> {
         let value = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
         Ok(create_print_statement(value))
     }
 
-    fn expression_statement(&mut self) -> Result<ChildExpression, &'static str> {
+    fn expression_statement(&mut self) -> Result<ChildStatement, &'static str> {
         let value = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after expression.")?;
         Ok(create_expression_statement(value))
@@ -146,7 +167,9 @@ impl<'a> Parser<'a> {
         } else if self.match_tokens(&[TokenKind::Number, TokenKind::String]) {
             Ok(create_literal(self.previous().literal.clone()))
         } else {
-            if self.match_token(TokenKind::LeftParen) {
+            if self.match_token(TokenKind::Identifier) {
+                Ok(create_variable(self.previous().clone()))
+            } else if self.match_token(TokenKind::LeftParen) {
                 let expr = self.expression()?;
                 self.consume(TokenKind::RightParen, "Expect ')' after expression")?;
                 Ok(create_grouping(expr))
