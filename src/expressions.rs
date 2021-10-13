@@ -38,12 +38,14 @@ pub fn create_unary(operator: Token, right: ChildExpression) -> ChildExpression 
     Some(Box::new(Expression::Unary { operator, right }))
 }
 
+#[allow(dead_code)]
 pub fn print_tree(root: &ChildExpression) -> String {
     let mut buf = String::new();
     print_tree_core(root, &mut buf);
     buf
 }
 
+#[allow(dead_code)]
 fn print_tree_core(root: &ChildExpression, buf: &mut String) {
     if let Some(root) = root {
         match &**root {

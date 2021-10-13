@@ -1,3 +1,5 @@
+use float_cmp::approx_eq;
+
 use crate::expressions::*;
 use crate::parser::*;
 use crate::tokens::*;
@@ -10,6 +12,27 @@ pub enum InterpreterLiteral {
     Boolean(bool),
 }
 
+impl PartialEq for InterpreterLiteral {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            InterpreterLiteral::Nil => matches!(other, InterpreterLiteral::Nil),
+            InterpreterLiteral::String(v) => match other {
+                InterpreterLiteral::String(v2) => *v == *v2,
+                _ => false,
+            },
+            InterpreterLiteral::Number(v) => match other {
+                InterpreterLiteral::Number(v2) => approx_eq!(f64, *v, *v2),
+                _ => false,
+            },
+            InterpreterLiteral::Boolean(v) => match other {
+                InterpreterLiteral::Boolean(v2) => *v == *v2,
+                _ => false,
+            },
+        }
+    }
+}
+impl Eq for InterpreterLiteral {}
+
 fn expect_literal(value: &InterpreterLiteral) -> Result<f64, &'static str> {
     match value {
         InterpreterLiteral::Number(v) => Ok(*v),
@@ -21,6 +44,14 @@ fn expect_string<'a>(value: &'a InterpreterLiteral) -> Result<&'a str, &'static 
     match value {
         InterpreterLiteral::String(v) => Ok(v),
         _ => Err("Operand must be a string"),
+    }
+}
+
+pub fn is_truthy(value: &InterpreterLiteral) -> bool {
+    match value {
+        InterpreterLiteral::Nil => false,
+        InterpreterLiteral::Boolean(v) => *v,
+        _ => true,
     }
 }
 
@@ -57,6 +88,8 @@ impl<'a> Interpreter<'a> {
             TokenKind::GreaterEqual => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? >= expect_literal(&right)?)),
             TokenKind::Less => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? < expect_literal(&right)?)),
             TokenKind::LessEqual => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? <= expect_literal(&right)?)),
+            TokenKind::EqualEqual => Ok(InterpreterLiteral::Boolean(left == right)),
+            TokenKind::BangEqual => Ok(InterpreterLiteral::Boolean(left != right)),
             _ => Err("Invalid binary operator"),
         }
     }
@@ -78,16 +111,8 @@ impl<'a> Interpreter<'a> {
         let right = Interpreter::execute_node(right)?;
         match operator.kind {
             TokenKind::Minus => Ok(InterpreterLiteral::Number(expect_literal(&right)? * -1.0)),
-            TokenKind::Bang => Ok(InterpreterLiteral::Boolean(!Interpreter::is_truthy(&right))),
+            TokenKind::Bang => Ok(InterpreterLiteral::Boolean(!is_truthy(&right))),
             _ => Err("Invalid unary operator"),
-        }
-    }
-
-    pub fn is_truthy(value: &InterpreterLiteral) -> bool {
-        match value {
-            InterpreterLiteral::Nil => false,
-            InterpreterLiteral::Boolean(v) => *v,
-            _ => true,
         }
     }
 
@@ -115,7 +140,7 @@ pub fn run(script: &str) {
     let mut parser = Parser::init(tokens);
     match parser.parse() {
         Ok(expression) => {
-            println!("Tree: {}", print_tree(&expression));
+            // println!("Tree: {}", print_tree(&expression));
             let mut interpreter = Interpreter::init(&expression);
             match interpreter.execute() {
                 Ok(result) => match result {
@@ -138,28 +163,6 @@ pub fn run(script: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use float_cmp::approx_eq;
-
-    impl PartialEq for InterpreterLiteral {
-        fn eq(&self, other: &Self) -> bool {
-            match self {
-                InterpreterLiteral::Nil => matches!(other, InterpreterLiteral::Nil),
-                InterpreterLiteral::String(v) => match other {
-                    InterpreterLiteral::String(v2) => *v == *v2,
-                    _ => false,
-                },
-                InterpreterLiteral::Number(v) => match other {
-                    InterpreterLiteral::Number(v2) => approx_eq!(f64, *v, *v2),
-                    _ => false,
-                },
-                InterpreterLiteral::Boolean(v) => match other {
-                    InterpreterLiteral::Boolean(v2) => *v == *v2,
-                    _ => false,
-                },
-            }
-        }
-    }
-    impl Eq for InterpreterLiteral {}
 
     #[test]
     pub fn literal_equality() {
@@ -230,5 +233,16 @@ mod tests {
         assert_eq!(InterpreterLiteral::Boolean(true), execute("3 < 4").ok().unwrap());
         assert!(execute("3 < false").is_err());
         assert!(execute("3 >= nil").is_err());
+
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("3 != 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("false == true").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("false != true").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("\"a\" == \"b\"").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("\"a\" != \"b\"").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == false").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == nil").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == \"3\"").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("nil == nil").ok().unwrap());
     }
 }
