@@ -18,4 +18,13 @@ impl Environment {
     pub fn get(&self, name: &String) -> Option<&InterpreterLiteral> {
         self.values.get(name)
     }
+
+    pub fn assign(&mut self, name: &str, value: InterpreterLiteral) -> Result<(), &'static str> {
+        if self.values.contains_key(name) {
+            self.values.insert(name.to_string(), value);
+            Ok(())
+        } else {
+            Err("Undefined variable usage.")
+        }
+    }
 }

@@ -62,7 +62,24 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<ChildExpression, &'static str> {
-        Ok(self.equality()?)
+        Ok(self.assignment()?)
+    }
+
+    fn assignment(&mut self) -> Result<ChildExpression, &'static str> {
+        let expr = self.equality()?;
+
+        if self.match_token(TokenKind::Equal) {
+            let value = self.assignment()?;
+            return match expr {
+                Some(v) => match *v {
+                    Expression::Variable { name } => Ok(create_assignment(name, value)),
+                    _ => Err("Invalid assignment target."),
+                },
+                _ => Err("Invalid assignment target."),
+            };
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<ChildExpression, &'static str> {

@@ -4,6 +4,10 @@ pub type ChildExpression = Option<Box<Expression>>;
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Assign {
+        name: Token,
+        value: ChildExpression,
+    },
     Binary {
         left: ChildExpression,
         operator: Token,
@@ -22,6 +26,10 @@ pub enum Expression {
     Variable {
         name: Token,
     },
+}
+
+pub fn create_assignment(name: Token, value: ChildExpression) -> ChildExpression {
+    Some(Box::new(Expression::Assign { name, value }))
 }
 
 pub fn create_binary(left: ChildExpression, operator: Token, right: ChildExpression) -> ChildExpression {

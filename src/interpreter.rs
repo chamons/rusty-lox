@@ -122,6 +122,12 @@ where
         }
     }
 
+    pub fn execute_assign_expression(&mut self, name: &Token, value: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+        let value = self.execute_expression(value)?;
+        self.environment.assign(&name.lexme, value.clone())?;
+        Ok(value)
+    }
+
     pub fn execute_variable_statement(&mut self, name: &Token, initializer: &Option<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
         let value = if let Some(initializer) = initializer {
             self.execute_expression(initializer)?
@@ -178,6 +184,7 @@ where
                     Some(v) => Ok(v.clone()),
                     None => Err(""),
                 },
+                Expression::Assign { name, value } => self.execute_assign_expression(&name, &value),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -241,6 +248,21 @@ mod tests {
 
     fn execute(script: &str) -> Result<InterpreterLiteral, &'static str> {
         let mut scanner = Scanner::init(&format!("print {};", script));
+        let (tokens, errors) = scanner.scan_tokens();
+        assert_eq!(0, errors.len());
+
+        let mut parser = Parser::init(tokens);
+        let parsed = parser.parse().unwrap();
+        let mut value = None;
+        let mut interpreter = Interpreter::init(|p| {
+            value = Some(p.clone());
+        });
+        interpreter.execute(&parsed)?;
+        Ok(value.unwrap_or(InterpreterLiteral::Nil))
+    }
+
+    fn execute_first_redirect(script: &str) -> Result<InterpreterLiteral, &'static str> {
+        let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
 
@@ -330,5 +352,22 @@ mod tests {
         execute_no_redirect("print \"three\";").ok();
         execute_no_redirect("print 3;").ok();
         execute_no_redirect("print nil;").ok();
+    }
+
+    #[test]
+    fn variable() {
+        execute_no_redirect("var x;").ok();
+        execute_no_redirect("var x = 10;").ok();
+        execute_no_redirect("var x = 3 + 2;").ok();
+    }
+
+    #[test]
+    fn assignment() {
+        assert_eq!(
+            InterpreterLiteral::Number(6.0),
+            execute_first_redirect("var x = 5; x = 6; print x;").ok().unwrap()
+        );
+        assert_eq!(InterpreterLiteral::Number(6.0), execute_first_redirect("var x; x = 6; print x;").ok().unwrap());
+        assert!(execute_first_redirect("x = 6; print x;").is_err());
     }
 }
