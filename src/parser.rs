@@ -1,17 +1,14 @@
 use crate::expressions::*;
 use crate::tokens::{Token, TokenKind, TokenLiteral};
 
-pub struct Parser {
-    tokens: Vec<Token>,
+pub struct Parser<'a> {
+    tokens: &'a Vec<Token>,
     current: u32,
 }
 
-impl Parser {
-    pub fn init(tokens: &Vec<Token>) -> Self {
-        Parser {
-            tokens: tokens.clone(), // TODO - Tokens could be not cloned with lifetime work
-            current: 0,
-        }
+impl<'a> Parser<'a> {
+    pub fn init(tokens: &'a Vec<Token>) -> Self {
+        Parser { tokens, current: 0 }
     }
 
     pub fn parse(&mut self) -> Result<ChildExpression, &'static str> {
@@ -172,23 +169,24 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::Parser, tokens::Scanner};
+    use super::*;
+    use crate::tokens::Scanner;
 
-    fn create_parser(script: &str) -> Parser {
+    fn parses_without_errors(script: &str) {
         let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
 
-        Parser::init(tokens)
-    }
-
-    fn parses_without_errors(script: &str) {
-        let mut parser = create_parser(script);
+        let mut parser = Parser::init(tokens);
         assert!(parser.parse().is_ok());
     }
 
     fn parses_with_errors(script: &str) {
-        let mut parser = create_parser(script);
+        let mut scanner = Scanner::init(script);
+        let (tokens, errors) = scanner.scan_tokens();
+        assert_eq!(0, errors.len());
+
+        let mut parser = Parser::init(tokens);
         assert!(parser.parse().is_err());
     }
 
