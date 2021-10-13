@@ -10,6 +10,20 @@ pub enum InterpreterLiteral {
     Boolean(bool),
 }
 
+fn expect_literal(value: &InterpreterLiteral) -> Result<f64, &'static str> {
+    match value {
+        InterpreterLiteral::Number(v) => Ok(*v),
+        _ => Err("Operand must be a number"),
+    }
+}
+
+fn expect_string<'a>(value: &'a InterpreterLiteral) -> Result<&'a str, &'static str> {
+    match value {
+        InterpreterLiteral::String(v) => Ok(v),
+        _ => Err("Operand must be a string"),
+    }
+}
+
 struct Interpreter<'a> {
     root: &'a ChildExpression,
 }
@@ -27,6 +41,22 @@ impl<'a> Interpreter<'a> {
         let left = Interpreter::execute_node(left)?;
         let right = Interpreter::execute_node(right)?;
         match operator.kind {
+            TokenKind::Plus => {
+                if matches!(left, InterpreterLiteral::Number(_)) && matches!(right, InterpreterLiteral::Number(_)) {
+                    Ok(InterpreterLiteral::Number(expect_literal(&left)? + expect_literal(&right)?))
+                } else if matches!(left, InterpreterLiteral::String(_)) && matches!(right, InterpreterLiteral::String(_)) {
+                    Ok(InterpreterLiteral::String(format!("{}{}", expect_string(&left)?, expect_string(&right)?)))
+                } else {
+                    Err("Invalid addition operator arguments")
+                }
+            }
+            TokenKind::Minus => Ok(InterpreterLiteral::Number(expect_literal(&left)? - expect_literal(&right)?)),
+            TokenKind::Slash => Ok(InterpreterLiteral::Number(expect_literal(&left)? / expect_literal(&right)?)),
+            TokenKind::Star => Ok(InterpreterLiteral::Number(expect_literal(&left)? * expect_literal(&right)?)),
+            TokenKind::Greater => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? > expect_literal(&right)?)),
+            TokenKind::GreaterEqual => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? >= expect_literal(&right)?)),
+            TokenKind::Less => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? < expect_literal(&right)?)),
+            TokenKind::LessEqual => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? <= expect_literal(&right)?)),
             _ => Err("Invalid binary operator"),
         }
     }
@@ -44,21 +74,20 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn expect_literal(value: &InterpreterLiteral) -> Result<f64, &'static str> {
-        match value {
-            InterpreterLiteral::Number(v) => Ok(*v),
-            _ => Err("Operand must be a number"),
-        }
-    }
-
     pub fn execute_unary(operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
         let right = Interpreter::execute_node(right)?;
         match operator.kind {
-            TokenKind::Minus => {
-                let value = Interpreter::expect_literal(&right)?;
-                Ok(InterpreterLiteral::Number(value * -1.0))
-            }
+            TokenKind::Minus => Ok(InterpreterLiteral::Number(expect_literal(&right)? * -1.0)),
+            TokenKind::Bang => Ok(InterpreterLiteral::Boolean(!Interpreter::is_truthy(&right))),
             _ => Err("Invalid unary operator"),
+        }
+    }
+
+    pub fn is_truthy(value: &InterpreterLiteral) -> bool {
+        match value {
+            InterpreterLiteral::Nil => false,
+            InterpreterLiteral::Boolean(v) => *v,
+            _ => true,
         }
     }
 
@@ -155,10 +184,51 @@ mod tests {
     }
 
     #[test]
-    pub fn single_values() {
+    fn single_values() {
         assert_eq!(InterpreterLiteral::Number(42.0), execute("42").ok().unwrap());
         assert_eq!(InterpreterLiteral::String("asdf".to_string()), execute("\"asdf\"").ok().unwrap());
         assert_eq!(InterpreterLiteral::Boolean(true), execute("true").ok().unwrap());
         assert_eq!(InterpreterLiteral::Nil, execute("nil").ok().unwrap());
+    }
+
+    #[test]
+    fn negative() {
+        assert_eq!(InterpreterLiteral::Number(-42.0), execute("-42").ok().unwrap());
+        assert!(execute("-\"asdf\"").is_err());
+        assert!(execute("-nil").is_err());
+        assert!(execute("-false").is_err());
+    }
+
+    #[test]
+    fn bang() {
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("!false").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("!true").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("!nil").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("!42").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("!\"a\"").ok().unwrap());
+    }
+
+    #[test]
+    fn binary() {
+        assert_eq!(InterpreterLiteral::Number(5.0), execute("3 + 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::String("32".to_string()), execute("\"3\" + \"2\"").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Number(1.0), execute("3 - 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Number(2.0), execute("4 / 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Number(8.0), execute("4 * 2").ok().unwrap());
+        assert!(execute("4 * false").is_err());
+        assert!(execute("4 / nil").is_err());
+        assert!(execute("4 - nil").is_err());
+        assert!(execute("4 + nil").is_err());
+        assert!(execute("\"4\" + nil").is_err());
+    }
+
+    #[test]
+    fn comparison() {
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("3 > 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("1 >= 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 <= 2").ok().unwrap());
+        assert_eq!(InterpreterLiteral::Boolean(true), execute("3 < 4").ok().unwrap());
+        assert!(execute("3 < false").is_err());
+        assert!(execute("3 >= nil").is_err());
     }
 }
