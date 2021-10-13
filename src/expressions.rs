@@ -20,6 +20,12 @@ pub enum Expression {
         operator: Token,
         right: ChildExpression,
     },
+    Expression {
+        expression: ChildExpression,
+    },
+    Print {
+        expression: ChildExpression,
+    },
 }
 
 pub fn create_binary(left: ChildExpression, operator: Token, right: ChildExpression) -> ChildExpression {
@@ -32,6 +38,14 @@ pub fn create_grouping(expression: ChildExpression) -> ChildExpression {
 
 pub fn create_literal(value: TokenLiteral) -> ChildExpression {
     Some(Box::new(Expression::Literal { value }))
+}
+
+pub fn create_print_statement(expression: ChildExpression) -> ChildExpression {
+    Some(Box::new(Expression::Print { expression }))
+}
+
+pub fn create_expression_statement(expression: ChildExpression) -> ChildExpression {
+    Some(Box::new(Expression::Expression { expression }))
 }
 
 pub fn create_unary(operator: Token, right: ChildExpression) -> ChildExpression {
@@ -68,6 +82,13 @@ fn print_tree_core(root: &ChildExpression, buf: &mut String) {
             Expression::Unary { operator, right } => {
                 write!(buf, "{:?} ", operator.kind).unwrap();
                 print_tree_core(&right, buf);
+            }
+            Expression::Print { expression } => {
+                write!(buf, "Print ").unwrap();
+                print_tree_core(&expression, buf);
+            }
+            Expression::Expression { expression } => {
+                print_tree_core(&expression, buf);
             }
         }
     }

@@ -11,8 +11,32 @@ impl<'a> Parser<'a> {
         Parser { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<ChildExpression, &'static str> {
-        self.expression()
+    pub fn parse(&mut self) -> Result<Vec<ChildExpression>, &'static str> {
+        let mut statements = vec![];
+        while !self.at_end() {
+            statements.push(self.statement()?);
+        }
+        Ok(statements)
+    }
+
+    fn statement(&mut self) -> Result<ChildExpression, &'static str> {
+        if self.match_token(TokenKind::Print) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<ChildExpression, &'static str> {
+        let value = self.expression()?;
+        self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
+        Ok(create_print_statement(value))
+    }
+
+    fn expression_statement(&mut self) -> Result<ChildExpression, &'static str> {
+        let value = self.expression()?;
+        self.consume(TokenKind::Semicolon, "Expect ';' after expression.")?;
+        Ok(create_expression_statement(value))
     }
 
     fn expression(&mut self) -> Result<ChildExpression, &'static str> {
@@ -173,7 +197,7 @@ mod tests {
     use crate::tokens::Scanner;
 
     fn parses_without_errors(script: &str) {
-        let mut scanner = Scanner::init(script);
+        let mut scanner = Scanner::init(&format!("{};", script));
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
 
@@ -182,7 +206,7 @@ mod tests {
     }
 
     fn parses_with_errors(script: &str) {
-        let mut scanner = Scanner::init(script);
+        let mut scanner = Scanner::init(&format!("{};", script));
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
 
@@ -216,7 +240,7 @@ mod tests {
         parses_without_errors("2 != 3");
         parses_without_errors("2 <= 3");
         parses_without_errors("2 < 3");
-        parses_without_errors("2 => 3");
+        parses_without_errors("2 >= 3");
         parses_without_errors("2 > 3");
     }
 }
