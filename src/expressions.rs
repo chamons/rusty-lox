@@ -33,7 +33,6 @@ pub enum Expression {
     },
     Call {
         callee: ChildExpression,
-        paren: Token,
         arguments: Vec<ChildExpression>,
     },
 }
@@ -66,6 +65,6 @@ pub fn create_logical(left: ChildExpression, operator: Token, right: ChildExpres
     Some(Box::new(Expression::Logical { left, operator, right }))
 }
 
-pub fn create_call(callee: ChildExpression, paren: Token, arguments: Vec<ChildExpression>) -> ChildExpression {
-    Some(Box::new(Expression::Call { callee, paren, arguments }))
+pub fn create_call(callee: ChildExpression, arguments: Vec<ChildExpression>) -> ChildExpression {
+    Some(Box::new(Expression::Call { callee, arguments }))
 }

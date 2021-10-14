@@ -1,22 +1,27 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::mem;
 use std::rc::Rc;
 
 use float_cmp::approx_eq;
 
+use crate::call;
 use crate::environment::Environment;
 use crate::expressions::*;
 use crate::parser::*;
 use crate::statements::*;
 use crate::tokens::*;
 
-#[derive(Debug, Clone)]
+type FunctionID = usize;
+
+#[derive(Clone, Debug)]
 pub enum InterpreterLiteral {
     Nil,
     String(String),
     Number(f64),
     Boolean(bool),
+    Callable(FunctionID),
 }
 
 impl fmt::Display for InterpreterLiteral {
@@ -26,6 +31,7 @@ impl fmt::Display for InterpreterLiteral {
             InterpreterLiteral::String(v) => write!(f, "{}", v),
             InterpreterLiteral::Number(v) => write!(f, "{}", v),
             InterpreterLiteral::Boolean(v) => write!(f, "{}", v),
+            InterpreterLiteral::Callable(v) => write!(f, "Function {}", v),
         }
     }
 }
@@ -44,6 +50,10 @@ impl PartialEq for InterpreterLiteral {
             },
             InterpreterLiteral::Boolean(v) => match other {
                 InterpreterLiteral::Boolean(v2) => *v == *v2,
+                _ => false,
+            },
+            InterpreterLiteral::Callable(v) => match other {
+                InterpreterLiteral::Callable(v2) => *v == *v2,
                 _ => false,
             },
         }
@@ -78,6 +88,7 @@ where
     T: FnMut(&InterpreterLiteral),
 {
     environment: Rc<RefCell<Environment>>,
+    functions: HashMap<FunctionID, Box<dyn call::Callable>>,
     print: T,
 }
 
@@ -86,10 +97,18 @@ where
     T: FnMut(&InterpreterLiteral),
 {
     pub fn init(print: T) -> Self {
-        Interpreter {
+        let mut interp = Interpreter {
             print,
+            functions: HashMap::new(),
             environment: Rc::new(RefCell::new(Environment::init())),
-        }
+        };
+        interp.setup_primitives();
+        interp
+    }
+
+    fn setup_primitives(&mut self) {
+        self.functions.insert(0, Box::new(call::ClockPrimitive::init()));
+        self.environment.borrow_mut().define("clock", InterpreterLiteral::Callable(0));
     }
 
     pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
@@ -125,13 +144,27 @@ where
         }
     }
 
-    pub fn execute_call_expression(
-        &mut self,
-        callee: &ChildExpression,
-        paren: &Token,
-        arguments: &Vec<ChildExpression>,
-    ) -> Result<InterpreterLiteral, &'static str> {
-        Err("")
+    pub fn execute_call_expression(&mut self, callee: &ChildExpression, arguments: &Vec<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
+        let callee = self.execute_expression(callee)?;
+
+        let mut expressed_args = vec![];
+        for argument in arguments {
+            expressed_args.push(self.execute_expression(argument)?);
+        }
+
+        match callee {
+            InterpreterLiteral::Callable(id) => match self.functions.get(&id) {
+                Some(fun) => {
+                    if fun.arity() != arguments.len() as u32 {
+                        Err("Unexpected number of function arguments.")
+                    } else {
+                        fun.call(&expressed_args)
+                    }
+                }
+                None => Err("Undefined function lookup."),
+            },
+            _ => Err("Can only call functions and classes."),
+        }
     }
 
     pub fn execute_logical_expression(
@@ -256,7 +289,7 @@ where
                 },
                 Expression::Assign { name, value } => self.execute_assign_expression(&name, &value),
                 Expression::Logical { left, operator, right } => self.execute_logical_expression(&left, &operator, &right),
-                Expression::Call { callee, paren, arguments } => self.execute_call_expression(&callee, &paren, &arguments),
+                Expression::Call { callee, arguments } => self.execute_call_expression(&callee, &arguments),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -562,5 +595,15 @@ for (var b = 1; a < 10000; b = temp + b) {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    pub fn callables() {
+        assert!(execute_with_redirect("\"asdf\"();").is_err());
+    }
+
+    #[test]
+    pub fn call_primitive() {
+        assert!(matches!(execute_with_redirect("print clock();").ok().unwrap(), InterpreterLiteral::Number(_)));
     }
 }

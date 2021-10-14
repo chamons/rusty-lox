@@ -303,9 +303,9 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let paren = self.consume(TokenKind::RightParen, "Expect ')' after arguments.")?.clone();
+        self.consume(TokenKind::RightParen, "Expect ')' after arguments.")?;
 
-        Ok(create_call(callee, paren, arguments))
+        Ok(create_call(callee, arguments))
     }
 
     fn primary(&mut self) -> Result<ChildExpression, &'static str> {
