@@ -79,6 +79,8 @@ impl<'a> Parser<'a> {
             self.if_statement()
         } else if self.match_token(TokenKind::Print) {
             self.print_statement()
+        } else if self.match_token(TokenKind::Return) {
+            self.return_statement()
         } else if self.match_token(TokenKind::While) {
             self.while_statement()
         } else if self.match_token(TokenKind::LeftBrace) {
@@ -139,6 +141,12 @@ impl<'a> Parser<'a> {
         let else_branch = if self.match_token(TokenKind::Else) { Some(self.statement()?) } else { None };
 
         Ok(create_if_statement(condition, then_branch, else_branch))
+    }
+
+    fn return_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        let value = if !self.check(TokenKind::Semicolon) { self.expression()? } else { None };
+        self.consume(TokenKind::Semicolon, "Expect ';' after return value")?;
+        Ok(create_return_statement(value))
     }
 
     fn while_statement(&mut self) -> Result<ChildStatement, &'static str> {
@@ -361,7 +369,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[allow(dead_code)]
     fn synchronize(&mut self) {
         self.advance();
 
@@ -606,5 +613,13 @@ mod tests {
     #[test]
     fn function_declare() {
         parses_without_errors("fun t() { print true; }");
+    }
+
+    #[test]
+    fn return_declare() {
+        parses_without_errors("fun t() { return true; }");
+        parses_without_errors("fun t() { return; }");
+        parses_with_errors("fun t() { return 42.0 }");
+        parses_with_errors("fun t() { return }");
     }
 }

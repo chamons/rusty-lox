@@ -50,6 +50,16 @@ impl Environment {
             }
         }
     }
+
+    #[allow(dead_code)]
+    pub fn dump(&self) {
+        for (key, value) in &self.values {
+            println!("[{}] -> {}", key, value);
+        }
+        if let Some(parent) = &self.parent {
+            parent.borrow().dump();
+        }
+    }
 }
 
 #[cfg(test)]

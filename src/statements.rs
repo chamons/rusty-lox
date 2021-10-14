@@ -31,6 +31,9 @@ pub enum Statement {
         params: Vec<Token>,
         body: Vec<ChildStatement>,
     },
+    Return {
+        value: ChildExpression,
+    },
 }
 
 pub fn create_expression_statement(expression: ChildExpression) -> ChildStatement {
@@ -63,4 +66,8 @@ pub fn create_while_statement(condition: ChildExpression, body: ChildStatement) 
 
 pub fn create_function_statement(name: Token, params: Vec<Token>, body: Vec<ChildStatement>) -> ChildStatement {
     Some(Box::new(Statement::Function { name, params, body }))
+}
+
+pub fn create_return_statement(value: ChildExpression) -> ChildStatement {
+    Some(Box::new(Statement::Return { value }))
 }

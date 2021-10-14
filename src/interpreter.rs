@@ -90,6 +90,13 @@ pub struct Interpreter {
     functions: HashMap<FunctionID, Rc<RefCell<dyn call::Callable>>>,
     current_function_offset: FunctionID,
     print: Box<dyn FnMut(&InterpreterLiteral)>,
+
+    // This is a truck sized hack.
+    // The book https://craftinginterpreters.com/functions.html uses
+    // exceptions for early return. We don't really have those
+    // but we do have Rust's ? to return errors
+    // So i'm going to return a "fake" error and set this
+    early_return: Option<InterpreterLiteral>,
 }
 
 impl Interpreter {
@@ -101,6 +108,7 @@ impl Interpreter {
             environment: Rc::clone(&globals),
             globals,
             current_function_offset: 0,
+            early_return: None,
         };
         interp.setup_primitives();
         interp
@@ -161,7 +169,21 @@ impl Interpreter {
                         Err("Unexpected number of function arguments.")
                     } else {
                         let callee = fun.borrow().duplicate();
-                        callee.call(self, &expressed_args)
+                        // Need to complete our early return hack here
+                        // If we return an error with our magic key, it was an early return
+                        // So don't return an error, return our side channel
+                        // Uggg....
+                        match callee.call(self, &expressed_args) {
+                            Ok(v) => Ok(v),
+                            Err(e) => {
+                                if e == Interpreter::EARLY_RETURN_NOT_AN_ERROR {
+                                    let real_return_value = self.early_return.take();
+                                    Ok(real_return_value.unwrap_or(InterpreterLiteral::Nil))
+                                } else {
+                                    Err(e)
+                                }
+                            }
+                        }
                     }
                 }
                 None => Err("Undefined function lookup."),
@@ -215,12 +237,14 @@ impl Interpreter {
         Ok(InterpreterLiteral::Nil)
     }
 
-    pub fn execution_function_declaration(
-        &mut self,
-        name: &Token,
-        params: &Vec<Token>,
-        body: &Vec<ChildStatement>,
-    ) -> Result<InterpreterLiteral, &'static str> {
+    const EARLY_RETURN_NOT_AN_ERROR: &'static str = "early-return";
+
+    pub fn execute_return_statement(&mut self, value: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+        self.early_return = if value.is_some() { Some(self.execute_expression(value)?) } else { None };
+        Err(Interpreter::EARLY_RETURN_NOT_AN_ERROR)
+    }
+
+    pub fn execute_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<InterpreterLiteral, &'static str> {
         let function = Rc::new(RefCell::new(UserFunction::init(name, params, body)));
         self.functions.insert(self.current_function_offset, function);
         self.environment
@@ -260,7 +284,11 @@ impl Interpreter {
         let previous = mem::replace(&mut self.environment, environment);
 
         for statement in statements {
-            self.execute_statement(statement)?;
+            let statement_value = self.execute_statement(statement);
+            if statement_value.is_err() {
+                self.environment = previous;
+                return Err(statement_value.expect_err("Internal consistency failure in execute_block"));
+            }
         }
 
         self.environment = previous;
@@ -327,7 +355,8 @@ impl Interpreter {
                     else_branch,
                 } => self.execute_conditional_statement(condition, then_branch, else_branch),
                 Statement::While { condition, body } => self.execute_while_statement(&condition, &body),
-                Statement::Function { name, params, body } => self.execution_function_declaration(name, params, body),
+                Statement::Function { name, params, body } => self.execute_function_declaration(name, params, body),
+                Statement::Return { value } => self.execute_return_statement(&value),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -654,11 +683,44 @@ for (var b = 1; a < 10000; b = temp + b) {
             .ok()
             .unwrap()
         );
+
+        assert_eq!(
+            InterpreterLiteral::String("Hi, Dear Reader!".to_string()),
+            execute_with_redirect(
+                r#"
+                fun sayHi(first, last) {
+                    print "Hi, " + first + " " + last + "!";
+                }
+                  
+                sayHi("Dear", "Reader");   
+"#
+            )
+            .ok()
+            .unwrap()
+        );
     }
 
     #[test]
     pub fn call_primitive() {
         assert!(matches!(execute_with_redirect("print clock();").ok().unwrap(), InterpreterLiteral::Number(_)));
         assert!(execute_with_redirect("clock(nil);").is_err());
+    }
+
+    #[test]
+    pub fn call_fib_with_return() {
+        assert_eq!(
+            InterpreterLiteral::Number(34.0),
+            execute_with_redirect(
+                r#"
+                fun fib(n) {
+                    if (n <= 1) return n;
+                    return fib(n - 2) + fib(n - 1);
+                }
+                print fib(9);
+"#
+            )
+            .ok()
+            .unwrap()
+        );
     }
 }
