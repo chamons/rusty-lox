@@ -7,6 +7,7 @@ use std::rc::Rc;
 use float_cmp::approx_eq;
 
 use crate::call;
+use crate::call::UserFunction;
 use crate::environment::Environment;
 use crate::expressions::*;
 use crate::parser::*;
@@ -83,32 +84,32 @@ pub fn is_truthy(value: &InterpreterLiteral) -> bool {
     }
 }
 
-pub struct Interpreter<T>
-where
-    T: FnMut(&InterpreterLiteral),
-{
+pub struct Interpreter {
+    pub globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
-    functions: HashMap<FunctionID, Box<dyn call::Callable>>,
-    print: T,
+    functions: HashMap<FunctionID, Rc<RefCell<dyn call::Callable>>>,
+    current_function_offset: FunctionID,
+    print: Box<dyn FnMut(&InterpreterLiteral)>,
 }
 
-impl<T> Interpreter<T>
-where
-    T: FnMut(&InterpreterLiteral),
-{
-    pub fn init(print: T) -> Self {
+impl Interpreter {
+    pub fn init(print: Box<dyn FnMut(&InterpreterLiteral)>) -> Self {
+        let globals = Rc::new(RefCell::new(Environment::init()));
         let mut interp = Interpreter {
             print,
             functions: HashMap::new(),
-            environment: Rc::new(RefCell::new(Environment::init())),
+            environment: Rc::clone(&globals),
+            globals,
+            current_function_offset: 0,
         };
         interp.setup_primitives();
         interp
     }
 
     fn setup_primitives(&mut self) {
-        self.functions.insert(0, Box::new(call::ClockPrimitive::init()));
+        self.functions.insert(0, Rc::new(RefCell::new(call::ClockPrimitive::init())));
         self.environment.borrow_mut().define("clock", InterpreterLiteral::Callable(0));
+        self.current_function_offset = 1;
     }
 
     pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
@@ -155,10 +156,11 @@ where
         match callee {
             InterpreterLiteral::Callable(id) => match self.functions.get(&id) {
                 Some(fun) => {
-                    if fun.arity() != arguments.len() as u32 {
+                    let fun = Rc::clone(fun);
+                    if fun.borrow().arity() != arguments.len() as u32 {
                         Err("Unexpected number of function arguments.")
                     } else {
-                        fun.call(&expressed_args)
+                        fun.borrow_mut().call(self, &expressed_args)
                     }
                 }
                 None => Err("Undefined function lookup."),
@@ -212,6 +214,21 @@ where
         Ok(InterpreterLiteral::Nil)
     }
 
+    pub fn execution_function_declaration(
+        &mut self,
+        name: &Token,
+        params: &Vec<Token>,
+        body: &Vec<ChildStatement>,
+    ) -> Result<InterpreterLiteral, &'static str> {
+        let function = Rc::new(RefCell::new(UserFunction::init(name, params, body)));
+        self.functions.insert(self.current_function_offset, function);
+        self.environment
+            .borrow_mut()
+            .define(&name.lexme, InterpreterLiteral::Callable(self.current_function_offset));
+        self.current_function_offset += 1;
+        Ok(InterpreterLiteral::Nil)
+    }
+
     pub fn execute_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
         while is_truthy(&self.execute_expression(condition)?) {
             self.execute_statement(body)?;
@@ -238,7 +255,7 @@ where
         Ok(InterpreterLiteral::Nil)
     }
 
-    fn execute_block(&mut self, statements: &Vec<ChildStatement>, environment: Rc<RefCell<Environment>>) -> Result<(), &'static str> {
+    pub fn execute_block(&mut self, statements: &Vec<ChildStatement>, environment: Rc<RefCell<Environment>>) -> Result<(), &'static str> {
         let previous = mem::replace(&mut self.environment, environment);
 
         for statement in statements {
@@ -309,7 +326,7 @@ where
                     else_branch,
                 } => self.execute_conditional_statement(condition, then_branch, else_branch),
                 Statement::While { condition, body } => self.execute_while_statement(&condition, &body),
-                Statement::Function { name, params, body } => Err(""),
+                Statement::Function { name, params, body } => self.execution_function_declaration(name, params, body),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -329,7 +346,7 @@ pub fn run_script(script: &str) {
     let mut parser = Parser::init(tokens);
     match parser.parse() {
         Ok(statements) => {
-            let mut interpreter = Interpreter::init(|p| println!("{}", p));
+            let mut interpreter = Interpreter::init(Box::new(|p| println!("{}", p)));
             match interpreter.execute(&statements) {
                 Err(err) => {
                     println!("Error: {}", err);
@@ -366,12 +383,14 @@ mod tests {
 
         let mut parser = Parser::init(tokens);
         let parsed = parser.parse().unwrap();
-        let mut value = None;
-        let mut interpreter = Interpreter::init(|p| {
-            value = Some(p.clone());
-        });
+        let value = Rc::new(RefCell::new(None));
+        let value_interp = Rc::clone(&value);
+        let mut interpreter = Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
+            value_interp.borrow_mut().replace(p.clone());
+        }));
         interpreter.execute(&parsed)?;
-        Ok(value.unwrap_or(InterpreterLiteral::Nil))
+        let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
+        Ok(value)
     }
 
     fn execute_with_redirect(script: &str) -> Result<InterpreterLiteral, &'static str> {
@@ -381,12 +400,15 @@ mod tests {
 
         let mut parser = Parser::init(tokens);
         let parsed = parser.parse().unwrap();
-        let mut value = None;
-        let mut interpreter = Interpreter::init(|p| {
-            value = Some(p.clone());
-        });
+        let value = Rc::new(RefCell::new(None));
+        let value_interp = Rc::clone(&value);
+
+        let mut interpreter = Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
+            value_interp.borrow_mut().replace(p.clone());
+        }));
         interpreter.execute(&parsed)?;
-        Ok(value.unwrap_or(InterpreterLiteral::Nil))
+        let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
+        Ok(value)
     }
 
     fn execute_no_redirect(script: &str) -> Result<(), &'static str> {
@@ -396,7 +418,7 @@ mod tests {
 
         let mut parser = Parser::init(tokens);
         let parsed = parser.parse().unwrap();
-        let mut interpreter = Interpreter::init(|_| {});
+        let mut interpreter = Interpreter::init(Box::new(|_| {}));
         interpreter.execute(&parsed)
     }
 
@@ -600,7 +622,22 @@ for (var b = 1; a < 10000; b = temp + b) {
 
     #[test]
     pub fn callables() {
-        assert!(execute_with_redirect("\"asdf\"();").is_err());
+        //assert!(execute_with_redirect("\"asdf\"();").is_err());
+        assert_eq!(
+            InterpreterLiteral::Number(3.0),
+            execute_with_redirect(
+                "
+            fun count(n) {
+            if (n > 1) count(n - 1);
+                print n;
+            }
+              
+            count(3);
+"
+            )
+            .ok()
+            .unwrap()
+        );
     }
 
     #[test]

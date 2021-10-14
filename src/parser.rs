@@ -580,6 +580,7 @@ mod tests {
         parses_without_errors("foo(1, true, nil);");
         parses_with_errors("foo(1, true, nil;");
         parses_with_errors("foo 1, true, nil);");
+        parses_without_errors("if (n > 1) count(n - 1);");
     }
 
     // No more than 255 arguments

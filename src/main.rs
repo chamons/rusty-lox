@@ -31,7 +31,7 @@ fn run_file(path: &str) {
 fn run_prompt() {
     let stdin = std::io::stdin();
     let mut line = String::new();
-    let mut interpreter = Interpreter::init(|p| println!("{}", p));
+    let mut interpreter = Interpreter::init(Box::new(|p| println!("{}", p)));
 
     loop {
         print!("> ");

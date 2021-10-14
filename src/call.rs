@@ -1,9 +1,14 @@
-use std::time::SystemTime;
+use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
-use crate::interpreter::InterpreterLiteral;
+use crate::{
+    environment::Environment,
+    interpreter::{Interpreter, InterpreterLiteral},
+    statements::ChildStatement,
+    tokens::Token,
+};
 
 pub trait Callable {
-    fn call(&self, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str>;
+    fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str>;
     fn name(&self) -> &str;
     fn arity(&self) -> u32;
 }
@@ -17,7 +22,7 @@ impl ClockPrimitive {
 }
 
 impl Callable for ClockPrimitive {
-    fn call(&self, _: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str> {
+    fn call(&self, _: &mut Interpreter, _: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str> {
         Ok(InterpreterLiteral::Number(
             SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64(),
         ))
@@ -29,5 +34,40 @@ impl Callable for ClockPrimitive {
 
     fn arity(&self) -> u32 {
         0
+    }
+}
+
+pub struct UserFunction {
+    name: Token,
+    params: Vec<Token>,
+    body: Vec<ChildStatement>,
+}
+
+impl UserFunction {
+    pub fn init(name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Self {
+        UserFunction {
+            name: name.clone(),
+            params: params.clone(),
+            body: body.clone(),
+        }
+    }
+}
+
+impl Callable for UserFunction {
+    fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str> {
+        let environment = Rc::new(RefCell::new(Environment::init_with_parent(&interpreter.globals)));
+        for (i, arg) in self.params.iter().enumerate() {
+            environment.borrow_mut().define(&arg.lexme, arguments[i].clone());
+        }
+        interpreter.execute_block(&self.body, environment)?;
+        Ok(InterpreterLiteral::Nil)
+    }
+
+    fn name(&self) -> &str {
+        &self.name.lexme
+    }
+
+    fn arity(&self) -> u32 {
+        self.params.len() as u32
     }
 }
