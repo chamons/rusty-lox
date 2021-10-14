@@ -31,6 +31,11 @@ pub enum Expression {
         operator: Token,
         right: ChildExpression,
     },
+    Call {
+        callee: ChildExpression,
+        paren: Token,
+        arguments: Vec<ChildExpression>,
+    },
 }
 
 pub fn create_assignment(name: Token, value: ChildExpression) -> ChildExpression {
@@ -59,4 +64,8 @@ pub fn create_variable(name: Token) -> ChildExpression {
 
 pub fn create_logical(left: ChildExpression, operator: Token, right: ChildExpression) -> ChildExpression {
     Some(Box::new(Expression::Logical { left, operator, right }))
+}
+
+pub fn create_call(callee: ChildExpression, paren: Token, arguments: Vec<ChildExpression>) -> ChildExpression {
+    Some(Box::new(Expression::Call { callee, paren, arguments }))
 }

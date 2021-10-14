@@ -272,8 +272,40 @@ impl<'a> Parser<'a> {
             let right = self.unary()?;
             Ok(create_unary(operator, right))
         } else {
-            self.primary()
+            self.call()
         }
+    }
+
+    fn call(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.primary()?;
+        loop {
+            if self.match_token(TokenKind::LeftParen) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: ChildExpression) -> Result<ChildExpression, &'static str> {
+        let mut arguments = vec![];
+
+        if !self.check(TokenKind::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    return Err("Can't have more than 255 arguments.");
+                }
+                arguments.push(self.expression()?);
+                if !self.match_token(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+
+        let paren = self.consume(TokenKind::RightParen, "Expect ')' after arguments.")?.clone();
+
+        Ok(create_call(callee, paren, arguments))
     }
 
     fn primary(&mut self) -> Result<ChildExpression, &'static str> {
@@ -517,5 +549,33 @@ mod tests {
                 print i;
             }",
         );
+    }
+
+    #[test]
+    fn parse_call() {
+        parses_without_errors("foo();");
+        parses_without_errors("foo(1, true, nil);");
+        parses_with_errors("foo(1, true, nil;");
+        parses_with_errors("foo 1, true, nil);");
+    }
+
+    // No more than 255 arguments
+    #[test]
+    fn max_parse_call() {
+        let mut script = "foo(".to_string();
+        for _ in 0..255 {
+            script.push_str("true,");
+        }
+        script.remove(script.len() - 1);
+        script.push_str(");");
+        parses_without_errors(&script);
+
+        let mut script = "foo(".to_string();
+        for _ in 0..256 {
+            script.push_str("true,");
+        }
+        script.remove(script.len() - 1);
+        script.push_str(");");
+        parses_with_errors(&script);
     }
 }

@@ -125,6 +125,15 @@ where
         }
     }
 
+    pub fn execute_call_expression(
+        &mut self,
+        callee: &ChildExpression,
+        paren: &Token,
+        arguments: &Vec<ChildExpression>,
+    ) -> Result<InterpreterLiteral, &'static str> {
+        Err("")
+    }
+
     pub fn execute_logical_expression(
         &mut self,
         left: &ChildExpression,
@@ -247,6 +256,7 @@ where
                 },
                 Expression::Assign { name, value } => self.execute_assign_expression(&name, &value),
                 Expression::Logical { left, operator, right } => self.execute_logical_expression(&left, &operator, &right),
+                Expression::Call { callee, paren, arguments } => self.execute_call_expression(&callee, &paren, &arguments),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
