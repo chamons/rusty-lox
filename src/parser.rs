@@ -20,6 +20,14 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
+    pub fn parse_single_expression(&mut self) -> Result<ChildExpression, &'static str> {
+        self.expression()
+    }
+
+    pub fn reset_position(&mut self) {
+        self.current = 0;
+    }
+
     fn declaration(&mut self) -> Result<ChildStatement, &'static str> {
         let result = if self.match_token(TokenKind::Var) {
             self.variable_declaration()

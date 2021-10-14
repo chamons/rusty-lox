@@ -54,7 +54,15 @@ fn run_prompt() {
                         _ => {}
                     },
                     Err(err) => {
-                        println!("Error: {}", err);
+                        // If we fail parsing as a statement, try an expression and print the value if so
+                        parser.reset_position();
+                        match parser.parse_single_expression() {
+                            Ok(expression) => match interpreter.execute_expression(&expression) {
+                                Ok(result) => println!("{}", result),
+                                Err(err) => println!("Error: {}", err),
+                            },
+                            Err(_) => println!("Error: {}", err),
+                        };
                     }
                 }
             }
