@@ -26,6 +26,11 @@ pub enum Expression {
     Variable {
         name: Token,
     },
+    Logical {
+        left: ChildExpression,
+        operator: Token,
+        right: ChildExpression,
+    },
 }
 
 pub fn create_assignment(name: Token, value: ChildExpression) -> ChildExpression {
@@ -50,4 +55,8 @@ pub fn create_unary(operator: Token, right: ChildExpression) -> ChildExpression 
 
 pub fn create_variable(name: Token) -> ChildExpression {
     Some(Box::new(Expression::Variable { name }))
+}
+
+pub fn create_logical(left: ChildExpression, operator: Token, right: ChildExpression) -> ChildExpression {
+    Some(Box::new(Expression::Logical { left, operator, right }))
 }

@@ -125,6 +125,27 @@ where
         }
     }
 
+    pub fn execute_logical_expression(
+        &mut self,
+        left: &ChildExpression,
+        operator: &Token,
+        right: &ChildExpression,
+    ) -> Result<InterpreterLiteral, &'static str> {
+        let left = self.execute_expression(left)?;
+
+        if operator.kind == TokenKind::Or {
+            if is_truthy(&left) {
+                return Ok(left);
+            }
+        } else {
+            if !is_truthy(&left) {
+                return Ok(left);
+            }
+        }
+
+        self.execute_expression(right)
+    }
+
     pub fn execute_assign_expression(&mut self, name: &Token, value: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
         let value = self.execute_expression(value)?;
         self.environment.borrow_mut().assign(&name.lexme, value.clone())?;
@@ -218,6 +239,7 @@ where
                     None => Err(""),
                 },
                 Expression::Assign { name, value } => self.execute_assign_expression(&name, &value),
+                Expression::Logical { left, operator, right } => self.execute_logical_expression(&left, &operator, &right),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -450,6 +472,7 @@ print c;"#,
         )
         .unwrap();
     }
+
     #[test]
     fn conditional() {
         assert_eq!(
@@ -465,6 +488,28 @@ print c;"#,
         assert_eq!(
             InterpreterLiteral::Nil,
             execute_first_redirect("if (true == false) { print true; }").ok().unwrap()
+        );
+    }
+
+    #[test]
+    fn conditional_logical() {
+        assert_eq!(
+            InterpreterLiteral::Boolean(false),
+            execute_first_redirect("if (true and false) { print true; } else { print false; }")
+                .ok()
+                .unwrap()
+        );
+        assert_eq!(
+            InterpreterLiteral::Boolean(false),
+            execute_first_redirect("if (false or false) { print true; } else { print false; }")
+                .ok()
+                .unwrap()
+        );
+        assert_eq!(
+            InterpreterLiteral::Boolean(true),
+            execute_first_redirect("if (true and true) { print true; } else { print false; }")
+                .ok()
+                .unwrap()
         );
     }
 }

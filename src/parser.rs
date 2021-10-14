@@ -98,7 +98,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<ChildExpression, &'static str> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.match_token(TokenKind::Equal) {
             let value = self.assignment()?;
@@ -109,6 +109,30 @@ impl<'a> Parser<'a> {
                 },
                 _ => Err("Invalid assignment target."),
             };
+        }
+
+        Ok(expr)
+    }
+
+    fn or(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.and()?;
+
+        while self.match_token(TokenKind::Or) {
+            let operator = self.previous().clone();
+            let right = self.and()?;
+            expr = create_logical(expr, operator, right);
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<ChildExpression, &'static str> {
+        let mut expr = self.equality()?;
+
+        while self.match_token(TokenKind::And) {
+            let operator = self.previous().clone();
+            let right = self.equality()?;
+            expr = create_logical(expr, operator, right);
         }
 
         Ok(expr)
@@ -346,6 +370,35 @@ mod tests {
         );
         parses_with_errors(
             "if (true == false)
+                2 == 3;
+            }",
+        );
+    }
+
+    #[test]
+    fn parse_logical_conditional() {
+        parses_without_errors(
+            "if (true and false) {
+                2 == 3;
+            }",
+        );
+        parses_without_errors(
+            "if (true or false) {
+                2 == 3;
+            }",
+        );
+        parses_without_errors(
+            "if (true or false and 1 == 2 or (true and false or true)) {
+                2 == 3;
+            }",
+        );
+        parses_with_errors(
+            "if (true and) {
+                2 == 3;
+            ",
+        );
+        parses_with_errors(
+            "if (or false)
                 2 == 3;
             }",
         );
