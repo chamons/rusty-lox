@@ -54,6 +54,8 @@ impl<'a> Parser<'a> {
             self.if_statement()
         } else if self.match_token(TokenKind::Print) {
             self.print_statement()
+        } else if self.match_token(TokenKind::While) {
+            self.while_statement()
         } else if self.match_token(TokenKind::LeftBrace) {
             Ok(create_block_statement(self.block()?))
         } else {
@@ -79,6 +81,14 @@ impl<'a> Parser<'a> {
         let else_branch = if self.match_token(TokenKind::Else) { Some(self.statement()?) } else { None };
 
         Ok(create_if_statement(condition, then_branch, else_branch))
+    }
+
+    fn while_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenKind::RightParen, "Expect ')' after condition.")?;
+        let body = self.statement()?;
+        Ok(create_while_statement(condition, body))
     }
 
     fn print_statement(&mut self) -> Result<ChildStatement, &'static str> {
@@ -402,5 +412,30 @@ mod tests {
                 2 == 3;
             }",
         );
+    }
+
+    #[test]
+    fn parse_while() {
+        parses_without_errors(
+            "while (true) {
+                2 == 3;
+            }",
+        );
+        parses_without_errors(
+            "while (true and false) {
+                2 == 3;
+            }",
+        );
+        parses_with_errors(
+            "while (true {
+                2 == 3;
+            }",
+        );
+        parses_with_errors(
+            "while true) {
+                2 == 3;
+            }",
+        );
+        parses_with_errors("while (true)");
     }
 }

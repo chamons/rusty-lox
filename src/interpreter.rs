@@ -170,6 +170,13 @@ where
         Ok(InterpreterLiteral::Nil)
     }
 
+    pub fn execute_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
+        while is_truthy(&self.execute_expression(condition)?) {
+            self.execute_statement(body)?;
+        }
+        Ok(InterpreterLiteral::Nil)
+    }
+
     pub fn execute_conditional_statement(
         &mut self,
         condition: &ChildExpression,
@@ -258,6 +265,7 @@ where
                     then_branch,
                     else_branch,
                 } => self.execute_conditional_statement(condition, then_branch, else_branch),
+                Statement::While { condition, body } => self.execute_while_statement(&condition, &body),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -507,9 +515,26 @@ print c;"#,
         );
         assert_eq!(
             InterpreterLiteral::Boolean(true),
-            execute_first_redirect("if (true and true) { print true; } else { print false; }")
-                .ok()
-                .unwrap()
+            execute_first_redirect("if (true and true) { print true; } else { print false; }").ok().unwrap()
+        );
+    }
+
+    #[test]
+    fn while_loop() {
+        assert_eq!(
+            InterpreterLiteral::Number(10.0),
+            execute_first_redirect(
+                "
+            var x = 0;
+            while (x < 10)
+            {
+                x = x + 1;
+            }
+            print x;
+"
+            )
+            .ok()
+            .unwrap()
         );
     }
 }
