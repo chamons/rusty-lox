@@ -12,6 +12,18 @@ with a recursive descent parser from the book ported from Java to Rust.
 ## Show Me
 
 ```
+$ cat fib.lox 
+fun fib(n) {
+    if (n <= 1) return n;
+    return fib(n - 2) + fib(n - 1);
+}
+var start = clock();
+print "fib(30):";
+print fib(30);
+var end = clock();
+print "Time:";
+print end - start;
+
 $ cargo run --release fib.lox
 fib(30):
 832040
