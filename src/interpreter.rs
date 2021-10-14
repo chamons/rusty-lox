@@ -149,6 +149,20 @@ where
         Ok(InterpreterLiteral::Nil)
     }
 
+    pub fn execute_conditional_statement(
+        &mut self,
+        condition: &ChildExpression,
+        then_branch: &ChildStatement,
+        else_branch: &Option<ChildStatement>,
+    ) -> Result<InterpreterLiteral, &'static str> {
+        if is_truthy(&self.execute_expression(condition)?) {
+            self.execute_statement(then_branch)?;
+        } else if let Some(else_branch) = else_branch {
+            self.execute_statement(else_branch)?;
+        }
+        Ok(InterpreterLiteral::Nil)
+    }
+
     pub fn execute_block_statement(&mut self, statements: &Vec<ChildStatement>) -> Result<InterpreterLiteral, &'static str> {
         self.execute_block(statements, Rc::new(RefCell::new(Environment::init_with_parent(&self.environment))))?;
         Ok(InterpreterLiteral::Nil)
@@ -217,6 +231,11 @@ where
                 Statement::Print { expression } => self.execute_print_statement(&expression),
                 Statement::Variable { name, initializer } => self.execute_variable_statement(&name, initializer),
                 Statement::Block { statements } => self.execute_block_statement(statements),
+                Statement::If {
+                    condition,
+                    then_branch,
+                    else_branch,
+                } => self.execute_conditional_statement(condition, then_branch, else_branch),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -430,5 +449,22 @@ print b;
 print c;"#,
         )
         .unwrap();
+    }
+    #[test]
+    fn conditional() {
+        assert_eq!(
+            InterpreterLiteral::Boolean(false),
+            execute_first_redirect("if (true == false) { print true; } else { print false; }").ok().unwrap()
+        );
+
+        assert_eq!(
+            InterpreterLiteral::Boolean(true),
+            execute_first_redirect("if (true == true) { print true; } else { print false; }").ok().unwrap()
+        );
+
+        assert_eq!(
+            InterpreterLiteral::Nil,
+            execute_first_redirect("if (true == false) { print true; }").ok().unwrap()
+        );
     }
 }

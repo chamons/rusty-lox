@@ -50,7 +50,9 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<ChildStatement, &'static str> {
-        if self.match_token(TokenKind::Print) {
+        if self.match_token(TokenKind::If) {
+            self.if_statement()
+        } else if self.match_token(TokenKind::Print) {
             self.print_statement()
         } else if self.match_token(TokenKind::LeftBrace) {
             Ok(create_block_statement(self.block()?))
@@ -66,6 +68,17 @@ impl<'a> Parser<'a> {
         }
         self.consume(TokenKind::RightBrace, "Expect '}' after block.")?;
         Ok(statements)
+    }
+
+    fn if_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenKind::RightParen, "Expect ')' after if condition.")?;
+
+        let then_branch = self.statement()?;
+        let else_branch = if self.match_token(TokenKind::Else) { Some(self.statement()?) } else { None };
+
+        Ok(create_if_statement(condition, then_branch, else_branch))
     }
 
     fn print_statement(&mut self) -> Result<ChildStatement, &'static str> {
@@ -316,6 +329,25 @@ mod tests {
             "{
             2 == 3;
             2 == 3;",
+        );
+    }
+
+    #[test]
+    fn parse_conditional() {
+        parses_without_errors(
+            "if (true == false) {
+                2 == 3;
+            }",
+        );
+        parses_with_errors(
+            "if (true == false) {
+                2 == 3;
+            ",
+        );
+        parses_with_errors(
+            "if (true == false)
+                2 == 3;
+            }",
         );
     }
 }
