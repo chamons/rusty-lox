@@ -309,6 +309,7 @@ where
                     else_branch,
                 } => self.execute_conditional_statement(condition, then_branch, else_branch),
                 Statement::While { condition, body } => self.execute_while_statement(&condition, &body),
+                Statement::Function { name, params, body } => Err(""),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -605,5 +606,6 @@ for (var b = 1; a < 10000; b = temp + b) {
     #[test]
     pub fn call_primitive() {
         assert!(matches!(execute_with_redirect("print clock();").ok().unwrap(), InterpreterLiteral::Number(_)));
+        assert!(execute_with_redirect("clock(nil);").is_err());
     }
 }

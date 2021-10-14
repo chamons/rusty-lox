@@ -29,7 +29,9 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> Result<ChildStatement, &'static str> {
-        let result = if self.match_token(TokenKind::Var) {
+        let result = if self.match_token(TokenKind::Fun) {
+            self.function_declaration()
+        } else if self.match_token(TokenKind::Var) {
             self.variable_declaration()
         } else {
             self.statement()
@@ -38,6 +40,27 @@ impl<'a> Parser<'a> {
             self.synchronize();
         }
         result
+    }
+
+    fn function_declaration(&mut self) -> Result<ChildStatement, &'static str> {
+        let name = self.consume(TokenKind::Identifier, "Expected identifier")?.clone();
+        self.consume(TokenKind::LeftParen, "Expect '(' after identifier.")?;
+        let mut params = vec![];
+        if !self.check(TokenKind::RightParen) {
+            loop {
+                if params.len() > 255 {
+                    return Err("Can't have more than 255 parameters.");
+                }
+                params.push(self.consume(TokenKind::Identifier, "Expect parameter name.")?.clone());
+                if !self.match_token(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenKind::RightParen, "Expect ')' after parameters.")?;
+        self.consume(TokenKind::LeftBrace, "Expect '{' before function body.")?;
+        let body = self.block()?;
+        Ok(create_function_statement(name, params, body))
     }
 
     fn variable_declaration(&mut self) -> Result<ChildStatement, &'static str> {
@@ -577,5 +600,10 @@ mod tests {
         script.remove(script.len() - 1);
         script.push_str(");");
         parses_with_errors(&script);
+    }
+
+    #[test]
+    fn function_declare() {
+        parses_without_errors("fun t() { print true; }");
     }
 }

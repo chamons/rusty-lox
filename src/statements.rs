@@ -26,6 +26,11 @@ pub enum Statement {
         condition: ChildExpression,
         body: ChildStatement,
     },
+    Function {
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<ChildStatement>,
+    },
 }
 
 pub fn create_expression_statement(expression: ChildExpression) -> ChildStatement {
@@ -54,4 +59,8 @@ pub fn create_if_statement(condition: ChildExpression, then_branch: ChildStateme
 
 pub fn create_while_statement(condition: ChildExpression, body: ChildStatement) -> ChildStatement {
     Some(Box::new(Statement::While { condition, body }))
+}
+
+pub fn create_function_statement(name: Token, params: Vec<Token>, body: Vec<ChildStatement>) -> ChildStatement {
+    Some(Box::new(Statement::Function { name, params, body }))
 }
