@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::utils::ScannerError;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     // Single-character tokens.
     LeftParen,

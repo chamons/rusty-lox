@@ -1,4 +1,7 @@
+use std::cell::RefCell;
 use std::fmt;
+use std::mem;
+use std::rc::Rc;
 
 use float_cmp::approx_eq;
 
@@ -74,7 +77,7 @@ pub struct Interpreter<T>
 where
     T: FnMut(&InterpreterLiteral),
 {
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
     print: T,
 }
 
@@ -85,7 +88,7 @@ where
     pub fn init(print: T) -> Self {
         Interpreter {
             print,
-            environment: Environment::init(),
+            environment: Rc::new(RefCell::new(Environment::init())),
         }
     }
 
@@ -124,18 +127,18 @@ where
 
     pub fn execute_assign_expression(&mut self, name: &Token, value: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
         let value = self.execute_expression(value)?;
-        self.environment.assign(&name.lexme, value.clone())?;
+        self.environment.borrow_mut().assign(&name.lexme, value.clone())?;
         Ok(value)
     }
 
-    pub fn execute_variable_statement(&mut self, name: &Token, initializer: &Option<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
-        let value = if let Some(initializer) = initializer {
+    pub fn execute_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+        let value = if initializer.is_some() {
             self.execute_expression(initializer)?
         } else {
             InterpreterLiteral::Nil
         };
 
-        self.environment.define(&name.lexme, value);
+        self.environment.borrow_mut().define(&name.lexme, value);
 
         Ok(InterpreterLiteral::Nil)
     }
@@ -144,6 +147,22 @@ where
         let value = self.execute_expression(expression)?;
         (self.print)(&value);
         Ok(InterpreterLiteral::Nil)
+    }
+
+    pub fn execute_block_statement(&mut self, statements: &Vec<ChildStatement>) -> Result<InterpreterLiteral, &'static str> {
+        self.execute_block(statements, Rc::new(RefCell::new(Environment::init_with_parent(&self.environment))))?;
+        Ok(InterpreterLiteral::Nil)
+    }
+
+    fn execute_block(&mut self, statements: &Vec<ChildStatement>, environment: Rc<RefCell<Environment>>) -> Result<(), &'static str> {
+        let previous = mem::replace(&mut self.environment, environment);
+
+        for statement in statements {
+            self.execute_statement(statement)?;
+        }
+
+        self.environment = previous;
+        Ok(())
     }
 
     pub fn execute_expression_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
@@ -180,7 +199,7 @@ where
                 Expression::Grouping { expression } => self.execute_grouping(&expression),
                 Expression::Literal { value } => self.execute_literal(&value),
                 Expression::Unary { operator, right } => self.execute_unary(&operator, &right),
-                Expression::Variable { name } => match self.environment.get(&name.lexme) {
+                Expression::Variable { name } => match self.environment.borrow().get(&name.lexme) {
                     Some(v) => Ok(v.clone()),
                     None => Err(""),
                 },
@@ -194,9 +213,10 @@ where
     pub fn execute_statement(&mut self, node: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
         if let Some(node) = node {
             match &**node {
-                Statements::Expression { expression } => self.execute_expression_statement(&expression),
-                Statements::Print { expression } => self.execute_print_statement(&expression),
-                Statements::Variable { name, initializer } => self.execute_variable_statement(&name, &initializer),
+                Statement::Expression { expression } => self.execute_expression_statement(&expression),
+                Statement::Print { expression } => self.execute_print_statement(&expression),
+                Statement::Variable { name, initializer } => self.execute_variable_statement(&name, initializer),
+                Statement::Block { statements } => self.execute_block_statement(statements),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -369,5 +389,46 @@ mod tests {
         );
         assert_eq!(InterpreterLiteral::Number(6.0), execute_first_redirect("var x; x = 6; print x;").ok().unwrap());
         assert!(execute_first_redirect("x = 6; print x;").is_err());
+    }
+
+    #[test]
+    fn block() {
+        assert_eq!(
+            InterpreterLiteral::Number(6.0),
+            execute_first_redirect("{ var x = 5; x = 6; print x; }").ok().unwrap()
+        );
+        assert_eq!(
+            InterpreterLiteral::Number(6.0),
+            execute_first_redirect("var x = nil;{ var x = 5; x = 6; print x; }").ok().unwrap()
+        );
+        assert_eq!(
+            InterpreterLiteral::Number(6.0),
+            execute_first_redirect("var x = nil;{ x = 6; print x; }").ok().unwrap()
+        );
+
+        // Example from book
+        execute_no_redirect(
+            r#"
+        var a = "global a";
+var b = "global b";
+var c = "global c";
+{
+  var a = "outer a";
+  var b = "outer b";
+  {
+    var a = "inner a";
+    print a;
+    print b;
+    print c;
+  }
+  print a;
+  print b;
+  print c;
+}
+print a;
+print b;
+print c;"#,
+        )
+        .unwrap();
     }
 }

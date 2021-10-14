@@ -35,7 +35,7 @@ impl<'a> Parser<'a> {
     fn variable_declaration(&mut self) -> Result<ChildStatement, &'static str> {
         let name = self.consume(TokenKind::Identifier, "Expect variable name.")?.clone();
 
-        let initializer = if self.match_token(TokenKind::Equal) { Some(self.expression()?) } else { None };
+        let initializer = if self.match_token(TokenKind::Equal) { self.expression()? } else { None };
         self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
 
         Ok(create_variable_statement(name.clone(), initializer))
@@ -44,9 +44,20 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<ChildStatement, &'static str> {
         if self.match_token(TokenKind::Print) {
             self.print_statement()
+        } else if self.match_token(TokenKind::LeftBrace) {
+            Ok(create_block_statement(self.block()?))
         } else {
             self.expression_statement()
         }
+    }
+
+    fn block(&mut self) -> Result<Vec<ChildStatement>, &'static str> {
+        let mut statements = vec![];
+        while !self.check(TokenKind::RightBrace) && !self.at_end() {
+            statements.push(self.declaration()?);
+        }
+        self.consume(TokenKind::RightBrace, "Expect '}' after block.")?;
+        Ok(statements)
     }
 
     fn print_statement(&mut self) -> Result<ChildStatement, &'static str> {
@@ -99,7 +110,7 @@ impl<'a> Parser<'a> {
 
     fn match_tokens(&mut self, kinds: &[TokenKind]) -> bool {
         for kind in kinds {
-            if self.check(kind) {
+            if self.check(*kind) {
                 self.advance();
                 return true;
             }
@@ -107,11 +118,11 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn check(&self, kind: &TokenKind) -> bool {
+    fn check(&self, kind: TokenKind) -> bool {
         if self.at_end() {
             false
         } else {
-            self.peek().kind == *kind
+            self.peek().kind == kind
         }
     }
 
@@ -198,7 +209,7 @@ impl<'a> Parser<'a> {
     }
 
     fn consume(&mut self, kind: TokenKind, message: &'static str) -> Result<&Token, &'static str> {
-        if self.check(&kind) {
+        if self.check(kind) {
             Ok(self.advance())
         } else {
             Err(message)
@@ -238,7 +249,7 @@ mod tests {
     use crate::tokens::Scanner;
 
     fn parses_without_errors(script: &str) {
-        let mut scanner = Scanner::init(&format!("{};", script));
+        let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
 
@@ -247,7 +258,7 @@ mod tests {
     }
 
     fn parses_with_errors(script: &str) {
-        let mut scanner = Scanner::init(&format!("{};", script));
+        let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
 
@@ -257,14 +268,14 @@ mod tests {
 
     #[test]
     fn parse_simple_expression() {
-        parses_without_errors("1 + 2");
-        parses_without_errors("-(1 + 2) * 4 / (4 + 1 - 2.3)");
+        parses_without_errors("1 + 2;");
+        parses_without_errors("-(1 + 2) * 4 / (4 + 1 - 2.3);");
     }
 
     #[test]
     fn parse_mismatched_braces() {
-        parses_with_errors("(");
-        parses_with_errors("-(1 + 2");
+        parses_with_errors("(;");
+        parses_with_errors("-(1 + 2;");
         // TODO - Need statement support to detect? We seem to eager
         // parses_with_errors("2)");
         // parses_with_errors(")");
@@ -272,16 +283,31 @@ mod tests {
 
     #[test]
     fn parse_leading_op() {
-        parses_with_errors("+ 2");
+        parses_with_errors("+ 2;");
     }
 
     #[test]
     fn parse_equality_and_comparisions() {
-        parses_without_errors("2 == 3");
-        parses_without_errors("2 != 3");
-        parses_without_errors("2 <= 3");
-        parses_without_errors("2 < 3");
-        parses_without_errors("2 >= 3");
-        parses_without_errors("2 > 3");
+        parses_without_errors("2 == 3;");
+        parses_without_errors("2 != 3;");
+        parses_without_errors("2 <= 3;");
+        parses_without_errors("2 < 3;");
+        parses_without_errors("2 >= 3;");
+        parses_without_errors("2 > 3;");
+    }
+
+    #[test]
+    fn parse_block() {
+        parses_without_errors(
+            "{
+            2 == 3;
+            2 == 3;
+        }",
+        );
+        parses_with_errors(
+            "{
+            2 == 3;
+            2 == 3;",
+        );
     }
 }
