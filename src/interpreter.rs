@@ -330,7 +330,7 @@ mod tests {
         Ok(value.unwrap_or(InterpreterLiteral::Nil))
     }
 
-    fn execute_first_redirect(script: &str) -> Result<InterpreterLiteral, &'static str> {
+    fn execute_with_redirect(script: &str) -> Result<InterpreterLiteral, &'static str> {
         let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         assert_eq!(0, errors.len());
@@ -434,25 +434,25 @@ mod tests {
     fn assignment() {
         assert_eq!(
             InterpreterLiteral::Number(6.0),
-            execute_first_redirect("var x = 5; x = 6; print x;").ok().unwrap()
+            execute_with_redirect("var x = 5; x = 6; print x;").ok().unwrap()
         );
-        assert_eq!(InterpreterLiteral::Number(6.0), execute_first_redirect("var x; x = 6; print x;").ok().unwrap());
-        assert!(execute_first_redirect("x = 6; print x;").is_err());
+        assert_eq!(InterpreterLiteral::Number(6.0), execute_with_redirect("var x; x = 6; print x;").ok().unwrap());
+        assert!(execute_with_redirect("x = 6; print x;").is_err());
     }
 
     #[test]
     fn block() {
         assert_eq!(
             InterpreterLiteral::Number(6.0),
-            execute_first_redirect("{ var x = 5; x = 6; print x; }").ok().unwrap()
+            execute_with_redirect("{ var x = 5; x = 6; print x; }").ok().unwrap()
         );
         assert_eq!(
             InterpreterLiteral::Number(6.0),
-            execute_first_redirect("var x = nil;{ var x = 5; x = 6; print x; }").ok().unwrap()
+            execute_with_redirect("var x = nil;{ var x = 5; x = 6; print x; }").ok().unwrap()
         );
         assert_eq!(
             InterpreterLiteral::Number(6.0),
-            execute_first_redirect("var x = nil;{ x = 6; print x; }").ok().unwrap()
+            execute_with_redirect("var x = nil;{ x = 6; print x; }").ok().unwrap()
         );
 
         // Example from book
@@ -485,17 +485,17 @@ print c;"#,
     fn conditional() {
         assert_eq!(
             InterpreterLiteral::Boolean(false),
-            execute_first_redirect("if (true == false) { print true; } else { print false; }").ok().unwrap()
+            execute_with_redirect("if (true == false) { print true; } else { print false; }").ok().unwrap()
         );
 
         assert_eq!(
             InterpreterLiteral::Boolean(true),
-            execute_first_redirect("if (true == true) { print true; } else { print false; }").ok().unwrap()
+            execute_with_redirect("if (true == true) { print true; } else { print false; }").ok().unwrap()
         );
 
         assert_eq!(
             InterpreterLiteral::Nil,
-            execute_first_redirect("if (true == false) { print true; }").ok().unwrap()
+            execute_with_redirect("if (true == false) { print true; }").ok().unwrap()
         );
     }
 
@@ -503,19 +503,15 @@ print c;"#,
     fn conditional_logical() {
         assert_eq!(
             InterpreterLiteral::Boolean(false),
-            execute_first_redirect("if (true and false) { print true; } else { print false; }")
-                .ok()
-                .unwrap()
+            execute_with_redirect("if (true and false) { print true; } else { print false; }").ok().unwrap()
         );
         assert_eq!(
             InterpreterLiteral::Boolean(false),
-            execute_first_redirect("if (false or false) { print true; } else { print false; }")
-                .ok()
-                .unwrap()
+            execute_with_redirect("if (false or false) { print true; } else { print false; }").ok().unwrap()
         );
         assert_eq!(
             InterpreterLiteral::Boolean(true),
-            execute_first_redirect("if (true and true) { print true; } else { print false; }").ok().unwrap()
+            execute_with_redirect("if (true and true) { print true; } else { print false; }").ok().unwrap()
         );
     }
 
@@ -523,7 +519,7 @@ print c;"#,
     fn while_loop() {
         assert_eq!(
             InterpreterLiteral::Number(10.0),
-            execute_first_redirect(
+            execute_with_redirect(
                 "
             var x = 0;
             while (x < 10)
@@ -534,6 +530,26 @@ print c;"#,
 "
             )
             .ok()
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn for_loop_fib() {
+        assert_eq!(
+            InterpreterLiteral::Number(6765.0),
+            execute_with_redirect(
+                "
+var a = 0;
+var temp;
+
+for (var b = 1; a < 10000; b = temp + b) {
+  print a;
+  temp = a;
+  a = b;
+}
+"
+            )
             .unwrap()
         );
     }

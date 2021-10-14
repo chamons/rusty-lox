@@ -50,7 +50,9 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<ChildStatement, &'static str> {
-        if self.match_token(TokenKind::If) {
+        if self.match_token(TokenKind::For) {
+            self.for_statement()
+        } else if self.match_token(TokenKind::If) {
             self.if_statement()
         } else if self.match_token(TokenKind::Print) {
             self.print_statement()
@@ -70,6 +72,39 @@ impl<'a> Parser<'a> {
         }
         self.consume(TokenKind::RightBrace, "Expect '}' after block.")?;
         Ok(statements)
+    }
+
+    fn for_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'for'.")?;
+
+        let initializer = if self.match_token(TokenKind::Semicolon) {
+            None
+        } else if self.match_token(TokenKind::Var) {
+            self.variable_declaration()?
+        } else {
+            self.expression_statement()?
+        };
+
+        let condition = if !self.check(TokenKind::Semicolon) { self.expression()? } else { None };
+        self.consume(TokenKind::Semicolon, "Expect ';' after loop condition.")?;
+
+        let increment = if !self.check(TokenKind::RightParen) { self.expression()? } else { None };
+        self.consume(TokenKind::RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+
+        // Sprinkle some sugar on it...
+        if let Some(increment) = increment {
+            body = create_block_statement(vec![body, create_expression_statement(Some(increment))]);
+        }
+        let condition = condition.or_else(|| create_literal(TokenLiteral::Boolean(true)));
+
+        body = create_while_statement(condition, body);
+        if let Some(initializer) = initializer {
+            body = create_block_statement(vec![Some(initializer), body]);
+        }
+
+        Ok(body)
     }
 
     fn if_statement(&mut self) -> Result<ChildStatement, &'static str> {
@@ -437,5 +472,50 @@ mod tests {
             }",
         );
         parses_with_errors("while (true)");
+    }
+
+    #[test]
+    fn parse_for() {
+        parses_without_errors(
+            "var i;
+            for (i = 0; i < 10; i = i + 1) {
+                print i;
+            }",
+        );
+        parses_without_errors(
+            "for (var i = 0; i < 10; i = i + 1) {
+                print i;
+            }",
+        );
+        parses_without_errors(
+            "for (;;) {
+                print i;
+            }",
+        );
+        parses_with_errors(
+            "for (var i = 0; i = i + 1) {
+                print i;
+            }",
+        );
+        parses_with_errors(
+            "for (i < 10; i = i + 1) {
+                print i;
+            }",
+        );
+        parses_with_errors(
+            "for (var i = 0; i < 10) {
+                print i;
+            }",
+        );
+        parses_with_errors(
+            "for var i = 0; i < 10; i = i + 1) {
+                print i;
+            }",
+        );
+        parses_with_errors(
+            "for (var i = 0; i < 10; i = i + 1 {
+                print i;
+            }",
+        );
     }
 }
