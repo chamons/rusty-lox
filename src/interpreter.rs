@@ -160,7 +160,8 @@ impl Interpreter {
                     if fun.borrow().arity() != arguments.len() as u32 {
                         Err("Unexpected number of function arguments.")
                     } else {
-                        fun.borrow_mut().call(self, &expressed_args)
+                        let callee = fun.borrow().duplicate();
+                        callee.call(self, &expressed_args)
                     }
                 }
                 None => Err("Undefined function lookup."),
@@ -622,7 +623,7 @@ for (var b = 1; a < 10000; b = temp + b) {
 
     #[test]
     pub fn callables() {
-        //assert!(execute_with_redirect("\"asdf\"();").is_err());
+        assert!(execute_with_redirect("\"asdf\"();").is_err());
         assert_eq!(
             InterpreterLiteral::Number(3.0),
             execute_with_redirect(
@@ -633,6 +634,21 @@ for (var b = 1; a < 10000; b = temp + b) {
             }
               
             count(3);
+"
+            )
+            .ok()
+            .unwrap()
+        );
+
+        assert_eq!(
+            InterpreterLiteral::Number(6.0),
+            execute_with_redirect(
+                "
+                fun add(a, b, c) {
+                    print a + b + c;
+                  }
+                  
+                  add(1, 2, 3);
 "
             )
             .ok()

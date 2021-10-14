@@ -11,6 +11,7 @@ pub trait Callable {
     fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str>;
     fn name(&self) -> &str;
     fn arity(&self) -> u32;
+    fn duplicate(&self) -> Box<dyn Callable>;
 }
 
 pub struct ClockPrimitive {}
@@ -34,6 +35,10 @@ impl Callable for ClockPrimitive {
 
     fn arity(&self) -> u32 {
         0
+    }
+
+    fn duplicate(&self) -> Box<dyn Callable> {
+        Box::new(ClockPrimitive::init())
     }
 }
 
@@ -69,5 +74,9 @@ impl Callable for UserFunction {
 
     fn arity(&self) -> u32 {
         self.params.len() as u32
+    }
+
+    fn duplicate(&self) -> Box<dyn Callable> {
+        Box::new(UserFunction::init(&self.name, &self.params, &self.body))
     }
 }
