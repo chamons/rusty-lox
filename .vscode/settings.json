@@ -1,5 +1,13 @@
 {
     "files.exclude": {
         "target/": true
-    }
+    },
+    "cSpell.words": [
+        "arity",
+        "callables",
+        "interp",
+        "lexme",
+        "nonexistant",
+        "Uggg"
+    ]
 }

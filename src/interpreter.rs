@@ -245,7 +245,7 @@ impl Interpreter {
     }
 
     pub fn execute_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<InterpreterLiteral, &'static str> {
-        let function = Rc::new(RefCell::new(UserFunction::init(name, params, body)));
+        let function = Rc::new(RefCell::new(UserFunction::init(name, params, body, &self.environment)));
         self.functions.insert(self.current_function_offset, function);
         self.environment
             .borrow_mut()
@@ -717,6 +717,32 @@ for (var b = 1; a < 10000; b = temp + b) {
                     return fib(n - 2) + fib(n - 1);
                 }
                 print fib(9);
+"#
+            )
+            .ok()
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn closure_counter() {
+        assert_eq!(
+            InterpreterLiteral::Number(2.0),
+            execute_with_redirect(
+                r#"
+                fun makeCounter() {
+                    var i = 0;
+                    fun count() {
+                      i = i + 1;
+                      print i;
+                    }
+                  
+                    return count;
+                  }
+                  
+                  var counter = makeCounter();
+                  counter(); // "1".
+                  counter(); // "2"
 "#
             )
             .ok()

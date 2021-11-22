@@ -46,21 +46,23 @@ pub struct UserFunction {
     name: Token,
     params: Vec<Token>,
     body: Vec<ChildStatement>,
+    closure: Rc<RefCell<Environment>>,
 }
 
 impl UserFunction {
-    pub fn init(name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Self {
+    pub fn init(name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>, closure: &Rc<RefCell<Environment>>) -> Self {
         UserFunction {
             name: name.clone(),
             params: params.clone(),
             body: body.clone(),
+            closure: Rc::clone(closure),
         }
     }
 }
 
 impl Callable for UserFunction {
     fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str> {
-        let environment = Rc::new(RefCell::new(Environment::init_with_parent(&interpreter.globals)));
+        let environment = Rc::new(RefCell::new(Environment::init_with_parent(&self.closure)));
         for (i, arg) in self.params.iter().enumerate() {
             environment.borrow_mut().define(&arg.lexme, arguments[i].clone());
         }
@@ -77,6 +79,6 @@ impl Callable for UserFunction {
     }
 
     fn duplicate(&self) -> Box<dyn Callable> {
-        Box::new(UserFunction::init(&self.name, &self.params, &self.body))
+        Box::new(UserFunction::init(&self.name, &self.params, &self.body, &self.closure))
     }
 }
