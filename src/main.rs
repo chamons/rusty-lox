@@ -3,6 +3,7 @@ mod environment;
 mod expressions;
 pub mod interpreter;
 mod parser;
+mod resolver;
 mod statements;
 pub mod tokens;
 mod utils;

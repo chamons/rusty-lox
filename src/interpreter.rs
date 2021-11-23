@@ -120,6 +120,10 @@ impl Interpreter {
         self.current_function_offset = 1;
     }
 
+    pub fn resolve(&mut self, expr: &ChildExpression, depth: usize) -> Result<(), &'static str> {
+        Ok(())
+    }
+
     pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
         for statement in statements {
             self.execute_statement(&statement)?;
@@ -744,6 +748,27 @@ for (var b = 1; a < 10000; b = temp + b) {
                   counter(); // "1".
                   counter(); // "2"
 "#
+            )
+            .ok()
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn closure_scope_issue() {
+        assert_eq!(
+            InterpreterLiteral::String("global".to_string()),
+            execute_with_redirect(
+                r#"var a = "global";
+        {
+          fun showA() {
+            print a;
+          }
+        
+          showA();
+          var a = "block";
+          showA();
+        }"#
             )
             .ok()
             .unwrap()
