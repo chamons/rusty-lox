@@ -90,6 +90,7 @@ pub struct Interpreter {
     functions: HashMap<FunctionID, Rc<RefCell<dyn call::Callable>>>,
     current_function_offset: FunctionID,
     print: Box<dyn FnMut(&InterpreterLiteral)>,
+    locals: HashMap<ChildExpression, usize>,
 
     // This is a truck sized hack.
     // The book https://craftinginterpreters.com/functions.html uses
@@ -109,6 +110,7 @@ impl Interpreter {
             globals,
             current_function_offset: 0,
             early_return: None,
+            locals: HashMap::new(),
         };
         interp.setup_primitives();
         interp
@@ -121,6 +123,7 @@ impl Interpreter {
     }
 
     pub fn resolve(&mut self, expr: &ChildExpression, depth: usize) -> Result<(), &'static str> {
+        //self.locals.insert(expr, depth);
         Ok(())
     }
 
