@@ -123,7 +123,7 @@ impl Interpreter {
     }
 
     pub fn resolve(&mut self, expr: &ChildExpression, depth: usize) -> Result<(), &'static str> {
-        //self.locals.insert(expr, depth);
+        self.locals.insert(expr.clone(), depth);
         Ok(())
     }
 
@@ -315,7 +315,7 @@ impl Interpreter {
         match value {
             TokenLiteral::Nil => Ok(InterpreterLiteral::Nil),
             TokenLiteral::String(v) => Ok(InterpreterLiteral::String(v.to_string())),
-            TokenLiteral::Number(v) => Ok(InterpreterLiteral::Number(*v)),
+            TokenLiteral::Number(v) => Ok(InterpreterLiteral::Number(v.value())),
             TokenLiteral::Boolean(v) => Ok(InterpreterLiteral::Boolean(*v)),
         }
     }

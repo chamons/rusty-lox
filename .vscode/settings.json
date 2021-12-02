@@ -6,6 +6,7 @@
     "arity",
     "callables",
     "fdsa",
+    "Hashable",
     "Hasher",
     "interp",
     "lexme",

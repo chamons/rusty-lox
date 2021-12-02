@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use crate::call::Callable;
-use crate::interpreter;
 use crate::interpreter::Interpreter;
 
 use super::expressions::*;
@@ -163,7 +161,7 @@ impl Resolver {
                 return Err("Can't read local variable in its own initializer.");
             }
         }
-        self.resolve_local(node, name);
+        self.resolve_local(node, name)?;
         Ok(())
     }
 

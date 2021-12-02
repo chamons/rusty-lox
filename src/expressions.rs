@@ -2,7 +2,7 @@ use crate::tokens::{Token, TokenLiteral};
 
 pub type ChildExpression = Option<Box<Expression>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expression {
     Assign {
         name: Token,

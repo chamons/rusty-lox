@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash};
 
 use super::utils::ScannerError;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum TokenKind {
     // Single-character tokens.
     LeftParen,
@@ -54,15 +54,50 @@ pub enum TokenKind {
     EOF,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum TokenLiteral {
     Nil,
     String(String),
-    Number(f64),
+    Number(HashableFloat),
     Boolean(bool),
 }
 
-#[derive(Debug, Clone)]
+// https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
+// We only Eq/Hash tokens for resolution of lines/variables, so it is completely
+// safe to have two different NaN not equal
+#[derive(Debug, Copy, Clone)]
+pub struct HashableFloat(f64);
+
+impl HashableFloat {
+    pub fn value(&self) -> f64 {
+        self.0
+    }
+}
+
+impl HashableFloat {
+    fn key(&self) -> u64 {
+        self.0.to_bits()
+    }
+}
+
+impl hash::Hash for HashableFloat {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher,
+    {
+        self.key().hash(state)
+    }
+}
+
+impl PartialEq for HashableFloat {
+    fn eq(&self, other: &HashableFloat) -> bool {
+        self.key() == other.key()
+    }
+}
+
+impl Eq for HashableFloat {}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Token {
     pub kind: TokenKind,
     pub lexme: String,
@@ -230,7 +265,7 @@ impl Scanner {
         }
         let text = self.source[self.start as usize..self.current as usize].to_string();
         match text.parse::<f64>() {
-            Ok(v) => self.add_token_with_value(TokenKind::Number, TokenLiteral::Number(v)),
+            Ok(v) => self.add_token_with_value(TokenKind::Number, TokenLiteral::Number(HashableFloat(v))),
             Err(_) => self.error(&format!("Invalid number: {}", text)),
         }
     }
