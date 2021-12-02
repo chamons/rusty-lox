@@ -423,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    pub fn trailing_point_numbers_are_seperate() {
+    pub fn trailing_point_numbers_are_separate() {
         let tokens = input_no_errors(".1234");
         matches_tokens(&tokens, &[TokenKind::Dot, TokenKind::Number, TokenKind::EOF]);
 
@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    pub fn identifer() {
+    pub fn identifier() {
         let tokens = input_no_errors("orchid");
         matches_tokens(&tokens, &[TokenKind::Identifier, TokenKind::EOF]);
     }

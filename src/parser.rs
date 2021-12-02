@@ -439,7 +439,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_equality_and_comparisions() {
+    fn parse_equality_and_comparisons() {
         parses_without_errors("2 == 3;");
         parses_without_errors("2 != 3;");
         parses_without_errors("2 <= 3;");
