@@ -1,0 +1,3 @@
+[profile.default]
+status-level = "slow"
+fail-fast = false
