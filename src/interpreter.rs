@@ -11,6 +11,7 @@ use crate::call::UserFunction;
 use crate::environment::Environment;
 use crate::expressions::*;
 use crate::parser::*;
+use crate::resolver::Resolver;
 use crate::statements::*;
 use crate::tokens::*;
 
@@ -220,9 +221,20 @@ impl Interpreter {
         self.execute_expression(right)
     }
 
-    pub fn execute_assign_expression(&mut self, name: &Token, value: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        let value = self.execute_expression(value)?;
-        self.environment.borrow_mut().assign(&name.lexme, value.clone())?;
+    pub fn execute_assign_expression(
+        &mut self,
+        name: &Token,
+        expression_value: &ChildExpression,
+        node: &ChildExpression,
+    ) -> Result<InterpreterLiteral, &'static str> {
+        let value = self.execute_expression(expression_value)?;
+
+        if let Some(distance) = self.locals.get(node) {
+            Environment::assign_at(&self.environment, *distance, &name.lexme, value.clone())?;
+        } else {
+            self.globals.borrow_mut().assign(&name.lexme, value.clone())?;
+        }
+
         Ok(value)
     }
 
@@ -329,24 +341,34 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_expression(&mut self, node: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
-        if let Some(node) = node {
+    pub fn execute_expression(&mut self, expr: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+        if let Some(node) = expr {
             match &**node {
                 Expression::Binary { left, operator, right } => self.execute_binary(&left, &operator, &right),
                 Expression::Grouping { expression } => self.execute_grouping(&expression),
                 Expression::Literal { value } => self.execute_literal(&value),
                 Expression::Unary { operator, right } => self.execute_unary(&operator, &right),
-                Expression::Variable { name } => match self.environment.borrow().get(&name.lexme) {
-                    Some(v) => Ok(v.clone()),
-                    None => Err(""),
-                },
-                Expression::Assign { name, value } => self.execute_assign_expression(&name, &value),
+                Expression::Variable { name } => self.lookup_variables(name, expr),
+                Expression::Assign { name, value } => self.execute_assign_expression(&name, &value, expr),
                 Expression::Logical { left, operator, right } => self.execute_logical_expression(&left, &operator, &right),
                 Expression::Call { callee, arguments } => self.execute_call_expression(&callee, &arguments),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
         }
+    }
+
+    pub fn lookup_variables(&mut self, name: &Token, node: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+        let v = if let Some(distance) = self.locals.get(node) {
+            Environment::get_at(&self.environment, *distance, &name.lexme)
+        } else {
+            self.globals.borrow().get(&name.lexme)
+        };
+        if v.is_none() {
+            println!("!");
+        }
+
+        v.ok_or("Unable to look variable")
     }
 
     pub fn execute_statement(&mut self, node: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
@@ -383,13 +405,20 @@ pub fn run_script(script: &str) {
     let mut parser = Parser::init(tokens);
     match parser.parse() {
         Ok(statements) => {
-            let mut interpreter = Interpreter::init(Box::new(|p| println!("{}", p)));
-            match interpreter.execute(&statements) {
+            let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|p| println!("{}", p)))));
+
+            let mut resolver = Resolver::init(&interpreter);
+            match resolver.resolve_statements(&statements) {
+                Err(e) => println!("Error: {}", e),
+                _ => {}
+            }
+
+            match interpreter.borrow_mut().execute(&statements) {
                 Err(err) => {
                     println!("Error: {}", err);
                 }
                 _ => {}
-            }
+            };
         }
         Err(err) => {
             println!("Error: {}", err);
@@ -400,6 +429,7 @@ pub fn run_script(script: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claim::assert_ok;
 
     #[test]
     pub fn literal_equality() {
@@ -422,10 +452,16 @@ mod tests {
         let parsed = parser.parse().unwrap();
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
-        let mut interpreter = Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
+        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
-        }));
-        interpreter.execute(&parsed)?;
+        }))));
+
+        let mut resolver = Resolver::init(&interpreter);
+
+        assert_ok!(resolver.resolve_statements(&parsed));
+
+        interpreter.borrow_mut().execute(&parsed)?;
+
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
     }
@@ -440,10 +476,14 @@ mod tests {
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
 
-        let mut interpreter = Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
+        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
-        }));
-        interpreter.execute(&parsed)?;
+        }))));
+
+        let mut resolver = Resolver::init(&interpreter);
+        assert_ok!(resolver.resolve_statements(&parsed));
+
+        interpreter.borrow_mut().execute(&parsed)?;
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
     }
@@ -455,8 +495,14 @@ mod tests {
 
         let mut parser = Parser::init(tokens);
         let parsed = parser.parse().unwrap();
-        let mut interpreter = Interpreter::init(Box::new(|_| {}));
-        interpreter.execute(&parsed)
+        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|_| {}))));
+
+        let mut resolver = Resolver::init(&interpreter);
+        assert_ok!(resolver.resolve_statements(&parsed));
+
+        interpreter.borrow_mut().execute(&parsed)?;
+
+        Ok(())
     }
 
     #[test]
@@ -545,21 +591,15 @@ mod tests {
 
     #[test]
     fn block() {
+        assert_eq!(Ok(InterpreterLiteral::Number(6.0)), execute_with_redirect("{ var x = 5; x = 6; print x; }"));
         assert_eq!(
-            InterpreterLiteral::Number(6.0),
-            execute_with_redirect("{ var x = 5; x = 6; print x; }").ok().unwrap()
+            Ok(InterpreterLiteral::Number(6.0)),
+            execute_with_redirect("var x = nil;{ var x = 5; x = 6; print x; }")
         );
-        assert_eq!(
-            InterpreterLiteral::Number(6.0),
-            execute_with_redirect("var x = nil;{ var x = 5; x = 6; print x; }").ok().unwrap()
-        );
-        assert_eq!(
-            InterpreterLiteral::Number(6.0),
-            execute_with_redirect("var x = nil;{ x = 6; print x; }").ok().unwrap()
-        );
+        assert_eq!(Ok(InterpreterLiteral::Number(6.0)), execute_with_redirect("var x = nil;{ x = 6; print x; }"));
 
         // Example from book
-        execute_no_redirect(
+        assert_ok!(execute_no_redirect(
             r#"
         var a = "global a";
 var b = "global b";
@@ -580,8 +620,7 @@ var c = "global c";
 print a;
 print b;
 print c;"#,
-        )
-        .unwrap();
+        ));
     }
 
     #[test]
@@ -640,7 +679,7 @@ print c;"#,
     #[test]
     fn for_loop_fib() {
         assert_eq!(
-            InterpreterLiteral::Number(6765.0),
+            Ok(InterpreterLiteral::Number(6765.0)),
             execute_with_redirect(
                 "
 var a = 0;
@@ -653,7 +692,6 @@ for (var b = 1; a < 10000; b = temp + b) {
 }
 "
             )
-            .unwrap()
         );
     }
 

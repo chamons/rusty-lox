@@ -38,6 +38,25 @@ impl Environment {
         }
     }
 
+    pub fn get_at(me: &Rc<RefCell<Environment>>, distance: usize, name: &str) -> Option<InterpreterLiteral> {
+        Environment::ancestor(me, distance).borrow().get(name)
+    }
+
+    fn ancestor(me: &Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
+        let mut environment: Rc<RefCell<Environment>> = Rc::clone(me);
+        for _ in 0..distance {
+            let parent = Rc::clone(
+                &environment
+                    .borrow()
+                    .parent
+                    .as_ref()
+                    .expect("Walked up an invalid number of levels in environment"),
+            );
+            environment = parent;
+        }
+        environment
+    }
+
     pub fn assign(&mut self, name: &str, value: InterpreterLiteral) -> Result<(), &'static str> {
         if self.values.contains_key(name) {
             self.values.insert(name.to_string(), value);
@@ -49,6 +68,10 @@ impl Environment {
                 Err("Undefined variable usage.")
             }
         }
+    }
+
+    pub fn assign_at(me: &Rc<RefCell<Environment>>, distance: usize, name: &str, value: InterpreterLiteral) -> Result<(), &'static str> {
+        Environment::ancestor(me, distance).borrow_mut().assign(name, value)
     }
 
     #[allow(dead_code)]

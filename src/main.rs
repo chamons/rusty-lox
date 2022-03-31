@@ -11,9 +11,12 @@ mod utils;
 #[macro_use]
 extern crate lazy_static;
 
+use resolver::Resolver;
 use std::{
+    cell::RefCell,
     env, fs,
     io::{self, Write},
+    rc::Rc,
 };
 use utils::die;
 
@@ -32,7 +35,8 @@ fn run_file(path: &str) {
 fn run_prompt() {
     let stdin = std::io::stdin();
     let mut line = String::new();
-    let mut interpreter = Interpreter::init(Box::new(|p| println!("{}", p)));
+    let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|p| println!("{}", p)))));
+    let mut resolver = Resolver::init(&interpreter);
 
     loop {
         print!("> ");
@@ -49,20 +53,29 @@ fn run_prompt() {
                 }
                 let mut parser = Parser::init(tokens);
                 match parser.parse() {
-                    Ok(statements) => match interpreter.execute(&statements) {
-                        Err(err) => {
-                            println!("Error: {}", err);
+                    Ok(statements) => {
+                        match resolver.resolve_statements(&statements) {
+                            Err(e) => println!("Error: {}", e),
+                            _ => {}
                         }
-                        _ => {}
-                    },
+
+                        match interpreter.borrow_mut().execute(&statements) {
+                            Err(err) => {
+                                println!("Error: {}", err);
+                            }
+                            _ => {}
+                        }
+                    }
                     Err(err) => {
                         // If we fail parsing as a statement, try an expression and print the value if so
                         parser.reset_position();
                         match parser.parse_single_expression() {
-                            Ok(expression) => match interpreter.execute_expression(&expression) {
-                                Ok(result) => println!("{}", result),
-                                Err(err) => println!("Error: {}", err),
-                            },
+                            Ok(expression) => {
+                                match interpreter.borrow_mut().execute_expression(&expression) {
+                                    Ok(result) => println!("{}", result),
+                                    Err(err) => println!("Error: {}", err),
+                                };
+                            }
                             Err(_) => println!("Error: {}", err),
                         };
                     }
