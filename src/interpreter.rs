@@ -488,6 +488,20 @@ mod tests {
         Ok(value)
     }
 
+    fn assert_fails_resolve(script: &str, expected_error: &str) {
+        let mut scanner = Scanner::init(script);
+        let (tokens, errors) = scanner.scan_tokens();
+        assert_eq!(0, errors.len());
+
+        let mut parser = Parser::init(tokens);
+        let parsed = parser.parse().unwrap();
+
+        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|_| {}))));
+
+        let mut resolver = Resolver::init(&interpreter);
+        assert_eq!(Err(expected_error), resolver.resolve_statements(&parsed));
+    }
+
     fn execute_no_redirect(script: &str) -> Result<(), &'static str> {
         let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
@@ -814,5 +828,21 @@ for (var b = 1; a < 10000; b = temp + b) {
             .ok()
             .unwrap()
         );
+    }
+
+    #[test]
+    fn bad_reassign() {
+        assert_fails_resolve(
+            r#"fun bad() {
+            var a = "first";
+            var a = "second";
+          }"#,
+            "Already a variable with this name in this scope.",
+        );
+    }
+
+    #[test]
+    fn bad_top_level_return() {
+        assert_fails_resolve(r#"return "at top level";"#, "Can't return from top-level code.");
     }
 }

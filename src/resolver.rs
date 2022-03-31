@@ -8,9 +8,16 @@ use super::expressions::*;
 use super::statements::*;
 use super::tokens::Token;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FunctionType {
+    None,
+    Function,
+}
+
 pub struct Resolver {
     scopes: Vec<HashMap<String, bool>>,
     interpreter: Rc<RefCell<Interpreter>>,
+    current_function: FunctionType,
 }
 
 impl Resolver {
@@ -18,6 +25,7 @@ impl Resolver {
         Resolver {
             scopes: vec![],
             interpreter: Rc::clone(interpreter),
+            current_function: FunctionType::None,
         }
     }
 
@@ -29,10 +37,14 @@ impl Resolver {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &Token) {
+    fn declare(&mut self, name: &Token) -> Result<(), &'static str> {
         if let Some(scope) = self.scopes.last_mut() {
+            if scope.contains_key(&name.lexme.to_string()) {
+                return Err("Already a variable with this name in this scope.");
+            }
             scope.insert(name.lexme.to_string(), false);
         }
+        Ok(())
     }
 
     fn define(&mut self, name: &Token) {
@@ -50,14 +62,17 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_function(&mut self, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<(), &'static str> {
+    fn resolve_function(&mut self, params: &Vec<Token>, body: &Vec<ChildStatement>, kind: FunctionType) -> Result<(), &'static str> {
+        let enclosing = self.current_function;
+        self.current_function = kind;
         self.begin_scope();
         for param in params {
-            self.declare(param);
+            self.declare(param)?;
             self.define(param);
         }
         self.resolve_list_of_statements(body)?;
         self.end_scope();
+        self.current_function = enclosing;
         Ok(())
     }
 
@@ -88,12 +103,20 @@ impl Resolver {
                     else_branch,
                 } => self.resolve_conditional_statement(condition, then_branch, else_branch),
                 Statement::Print { expression } => self.resolve_expression(expression),
-                Statement::Return { value } => self.resolve_expression(value),
+                Statement::Return { value } => self.resolve_return_statement(value),
                 Statement::While { condition, body } => self.resolve_while_statement(condition, body),
             }
         } else {
             Ok(())
         }
+    }
+
+    fn resolve_return_statement(&mut self, value: &ChildExpression) -> Result<(), &'static str> {
+        if self.current_function == FunctionType::None {
+            return Err("Can't return from top-level code.");
+        }
+        self.resolve_expression(value)?;
+        Ok(())
     }
 
     fn resolve_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<(), &'static str> {
@@ -117,9 +140,9 @@ impl Resolver {
     }
 
     fn resolve_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<(), &'static str> {
-        self.declare(name);
+        self.declare(name)?;
         self.define(name);
-        self.resolve_function(params, body)?;
+        self.resolve_function(params, body, FunctionType::Function)?;
         Ok(())
     }
 
@@ -177,7 +200,7 @@ impl Resolver {
     }
 
     fn resolve_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<(), &'static str> {
-        self.declare(name);
+        self.declare(name)?;
         if initializer.is_some() {
             self.resolve_expression(initializer)?;
         }
