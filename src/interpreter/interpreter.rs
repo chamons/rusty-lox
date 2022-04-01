@@ -6,14 +6,8 @@ use std::rc::Rc;
 
 use float_cmp::approx_eq;
 
-use crate::call;
-use crate::call::UserFunction;
-use crate::environment::Environment;
-use crate::expressions::*;
+use super::{call, call::UserFunction, environment::Environment, Resolver};
 use crate::parser::*;
-use crate::resolver::Resolver;
-use crate::statements::*;
-use crate::tokens::*;
 
 type FunctionID = usize;
 

@@ -1,6 +1,6 @@
-use crate::expressions::*;
-use crate::statements::*;
-use crate::tokens::{Token, TokenKind, TokenLiteral};
+use super::expressions::*;
+use super::statements::*;
+use super::tokens::{Token, TokenKind, TokenLiteral};
 
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
@@ -397,8 +397,8 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::Scanner;
     use super::*;
-    use crate::tokens::Scanner;
 
     fn parses_without_errors(script: &str) {
         let mut scanner = Scanner::init(script);

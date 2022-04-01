@@ -1,10 +1,9 @@
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
+use super::environment::Environment;
 use crate::{
-    environment::Environment,
     interpreter::{Interpreter, InterpreterLiteral},
-    statements::ChildStatement,
-    tokens::Token,
+    parser::{ChildStatement, Token},
 };
 
 pub trait Callable {

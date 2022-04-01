@@ -1,28 +1,21 @@
-mod call;
-mod environment;
-mod expressions;
-pub mod interpreter;
+mod interpreter;
 mod parser;
-mod resolver;
-mod statements;
-pub mod tokens;
 mod utils;
+
+use utils::die;
 
 #[macro_use]
 extern crate lazy_static;
 
-use resolver::Resolver;
 use std::{
     cell::RefCell,
     env, fs,
     io::{self, Write},
     rc::Rc,
 };
-use utils::die;
 
-use interpreter::Interpreter;
-
-use crate::{parser::Parser, tokens::Scanner};
+use interpreter::{Interpreter, Resolver};
+use parser::{Parser, Scanner};
 
 fn run_file(path: &str) {
     let file = fs::read_to_string(path);

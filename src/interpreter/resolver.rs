@@ -4,9 +4,7 @@ use std::rc::Rc;
 
 use crate::interpreter::Interpreter;
 
-use super::expressions::*;
-use super::statements::*;
-use super::tokens::Token;
+use crate::parser::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FunctionType {
