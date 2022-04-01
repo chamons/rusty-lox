@@ -1,6 +1,6 @@
 # rusty-lox
 
-This is an implementation of lox in rust through chapter 10 of [the book](https://craftinginterpreters.com/functions.html).
+This is an implementation of lox in rust through chapter 11 of [the book](https://craftinginterpreters.com/functions.html).
 
 It contains:
 - User declared functions, with recursion
