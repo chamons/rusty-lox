@@ -19,7 +19,7 @@ impl FrontEnd {
     }
 
     pub fn execute_single_line(&mut self, line: &str) -> Result<(), String> {
-        let mut scanner = Scanner::init(&line);
+        let mut scanner = Scanner::init(line);
         let (tokens, errors) = scanner.scan_tokens();
         if errors.len() > 0 {
             return Err(format!("{:?}", errors));

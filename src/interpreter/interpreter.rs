@@ -124,7 +124,7 @@ impl Interpreter {
 
     pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
         for statement in statements {
-            self.execute_statement(&statement)?;
+            self.execute_statement(statement)?;
         }
         Ok(())
     }
@@ -338,14 +338,14 @@ impl Interpreter {
     pub fn execute_expression(&mut self, expr: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
         if let Some(node) = expr {
             match &**node {
-                Expression::Binary { left, operator, right } => self.execute_binary(&left, &operator, &right),
-                Expression::Grouping { expression } => self.execute_grouping(&expression),
-                Expression::Literal { value } => self.execute_literal(&value),
-                Expression::Unary { operator, right } => self.execute_unary(&operator, &right),
+                Expression::Binary { left, operator, right } => self.execute_binary(left, operator, right),
+                Expression::Grouping { expression } => self.execute_grouping(expression),
+                Expression::Literal { value } => self.execute_literal(value),
+                Expression::Unary { operator, right } => self.execute_unary(operator, right),
                 Expression::Variable { name } => self.lookup_variables(name, expr),
-                Expression::Assign { name, value } => self.execute_assign_expression(&name, &value, expr),
-                Expression::Logical { left, operator, right } => self.execute_logical_expression(&left, &operator, &right),
-                Expression::Call { callee, arguments } => self.execute_call_expression(&callee, &arguments),
+                Expression::Assign { name, value } => self.execute_assign_expression(name, value, expr),
+                Expression::Logical { left, operator, right } => self.execute_logical_expression(left, operator, right),
+                Expression::Call { callee, arguments } => self.execute_call_expression(callee, arguments),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
@@ -368,18 +368,18 @@ impl Interpreter {
     pub fn execute_statement(&mut self, node: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
         if let Some(node) = node {
             match &**node {
-                Statement::Expression { expression } => self.execute_expression_statement(&expression),
-                Statement::Print { expression } => self.execute_print_statement(&expression),
-                Statement::Variable { name, initializer } => self.execute_variable_statement(&name, initializer),
+                Statement::Expression { expression } => self.execute_expression_statement(expression),
+                Statement::Print { expression } => self.execute_print_statement(expression),
+                Statement::Variable { name, initializer } => self.execute_variable_statement(name, initializer),
                 Statement::Block { statements } => self.execute_block_statement(statements),
                 Statement::If {
                     condition,
                     then_branch,
                     else_branch,
                 } => self.execute_conditional_statement(condition, then_branch, else_branch),
-                Statement::While { condition, body } => self.execute_while_statement(&condition, &body),
+                Statement::While { condition, body } => self.execute_while_statement(condition, body),
                 Statement::Function { name, params, body } => self.execute_function_declaration(name, params, body),
-                Statement::Return { value } => self.execute_return_statement(&value),
+                Statement::Return { value } => self.execute_return_statement(value),
             }
         } else {
             Ok(InterpreterLiteral::Nil)

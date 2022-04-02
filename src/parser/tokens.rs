@@ -51,7 +51,7 @@ pub enum TokenKind {
     Var,
     While,
 
-    EOF,
+    EndOfFile,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -166,7 +166,7 @@ impl Scanner {
             self.start = self.current;
             self.scan_token();
         }
-        self.tokens.push(Token::init(TokenKind::EOF, "", TokenLiteral::Nil, self.line));
+        self.tokens.push(Token::init(TokenKind::EndOfFile, "", TokenLiteral::Nil, self.line));
         (&self.tokens, &self.errors)
     }
 
@@ -245,7 +245,7 @@ impl Scanner {
         }
         let text = self.source[self.start as usize..self.current as usize].to_string();
         let kind = match KEYWORDS.get(&*text) {
-            Some(keyword) => keyword.clone(),
+            Some(keyword) => *keyword,
             None => TokenKind::Identifier,
         };
         self.add_token(kind);
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     pub fn comment() {
         let tokens = input_no_errors("{}// Hello World");
-        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EndOfFile]);
     }
 
     #[test]
@@ -424,7 +424,7 @@ mod tests {
                 TokenKind::RightBrace,
                 TokenKind::LeftParen,
                 TokenKind::RightParen,
-                TokenKind::EOF,
+                TokenKind::EndOfFile,
             ],
         );
     }
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     pub fn strings() {
         let tokens = input_no_errors("\"asdf fdsa {!/)\"");
-        matches_tokens(&tokens, &[TokenKind::String, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::String, TokenKind::EndOfFile]);
     }
 
     #[test]
@@ -453,17 +453,17 @@ mod tests {
     pub fn numbers() {
         for n in &["1234", "12.34"] {
             let tokens = input_no_errors(n);
-            matches_tokens(&tokens, &[TokenKind::Number, TokenKind::EOF]);
+            matches_tokens(&tokens, &[TokenKind::Number, TokenKind::EndOfFile]);
         }
     }
 
     #[test]
     pub fn trailing_point_numbers_are_separate() {
         let tokens = input_no_errors(".1234");
-        matches_tokens(&tokens, &[TokenKind::Dot, TokenKind::Number, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::Dot, TokenKind::Number, TokenKind::EndOfFile]);
 
         let tokens = input_no_errors("1234.");
-        matches_tokens(&tokens, &[TokenKind::Number, TokenKind::Dot, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::Number, TokenKind::Dot, TokenKind::EndOfFile]);
     }
 
     #[test]
@@ -478,13 +478,13 @@ mod tests {
     #[test]
     pub fn identifier() {
         let tokens = input_no_errors("orchid");
-        matches_tokens(&tokens, &[TokenKind::Identifier, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::Identifier, TokenKind::EndOfFile]);
     }
 
     #[test]
     pub fn reserved_words_inside_identifiers() {
         let tokens = input_no_errors("\"orchid\"");
-        matches_tokens(&tokens, &[TokenKind::String, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::String, TokenKind::EndOfFile]);
     }
 
     #[test]
@@ -497,7 +497,7 @@ mod tests {
                 TokenKind::RightBrace,
                 TokenKind::LeftParen,
                 TokenKind::RightParen,
-                TokenKind::EOF,
+                TokenKind::EndOfFile,
             ],
         );
     }
@@ -509,7 +509,7 @@ mod tests {
 
 */",
         );
-        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EndOfFile]);
     }
 
     #[test]
@@ -519,6 +519,6 @@ mod tests {
             
 World",
         );
-        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EOF]);
+        matches_tokens(&tokens, &[TokenKind::LeftBrace, TokenKind::RightBrace, TokenKind::EndOfFile]);
     }
 }

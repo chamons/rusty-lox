@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
         let initializer = if self.match_token(TokenKind::Equal) { self.expression()? } else { None };
         self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
 
-        Ok(create_variable_statement(name.clone(), initializer))
+        Ok(create_variable_statement(name, initializer))
     }
 
     fn statement(&mut self) -> Result<ChildStatement, &'static str> {
@@ -170,7 +170,7 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<ChildExpression, &'static str> {
-        Ok(self.assignment()?)
+        self.assignment()
     }
 
     fn assignment(&mut self) -> Result<ChildExpression, &'static str> {
@@ -255,7 +255,7 @@ impl<'a> Parser<'a> {
     }
 
     fn at_end(&self) -> bool {
-        self.peek().kind == TokenKind::EOF
+        self.peek().kind == TokenKind::EndOfFile
     }
 
     fn peek(&self) -> &Token {

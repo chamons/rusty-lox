@@ -17,7 +17,7 @@ impl Environment {
     pub fn init_with_parent(parent: &Rc<RefCell<Environment>>) -> Self {
         Environment {
             values: HashMap::new(),
-            parent: Some(Rc::clone(&parent)),
+            parent: Some(Rc::clone(parent)),
         }
     }
 
@@ -30,7 +30,7 @@ impl Environment {
             Some(v) => Some(v.clone()),
             None => {
                 if let Some(parent) = &self.parent {
-                    parent.borrow().get(name).clone()
+                    parent.borrow().get(name)
                 } else {
                     None
                 }
@@ -46,7 +46,7 @@ impl Environment {
         let mut environment: Rc<RefCell<Environment>> = Rc::clone(me);
         for _ in 0..distance {
             let parent = Rc::clone(
-                &environment
+                environment
                     .borrow()
                     .parent
                     .as_ref()

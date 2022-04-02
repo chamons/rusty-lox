@@ -1,3 +1,11 @@
+#![allow(
+    clippy::ptr_arg,
+    clippy::collapsible_else_if,
+    clippy::len_zero,
+    clippy::nonminimal_bool,
+    clippy::module_inception
+)]
+
 mod interpreter;
 mod parser;
 mod utils;
