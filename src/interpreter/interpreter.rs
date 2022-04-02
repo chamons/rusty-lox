@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use float_cmp::approx_eq;
 
-use super::{call, call::UserFunction, environment::Environment, Resolver};
+use super::{call, call::UserFunction, environment::Environment};
 use crate::parser::*;
 
 type FunctionID = usize;
@@ -387,48 +387,17 @@ impl Interpreter {
     }
 }
 
-pub fn run_script(script: &str) {
-    let mut scanner = Scanner::init(script);
-    let (tokens, errors) = scanner.scan_tokens();
-    if errors.len() > 0 {
-        for e in errors {
-            println!("{}", e);
-        }
-        return;
-    }
-    let mut parser = Parser::init(tokens);
-    match parser.parse() {
-        Ok(statements) => {
-            let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|p| println!("{}", p)))));
-
-            let mut resolver = Resolver::init(&interpreter);
-            match resolver.resolve_statements(&statements) {
-                Err(e) => println!("Error: {}", e),
-                _ => {}
-            }
-
-            match interpreter.borrow_mut().execute(&statements) {
-                Err(err) => {
-                    println!("Error: {}", err);
-                }
-                _ => {}
-            };
-        }
-        Err(err) => {
-            println!("Error: {}", err);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::interpreter::Resolver;
+
     use super::*;
     use claim::assert_ok;
 
     #[test]
     pub fn literal_equality() {
-        assert_eq!(InterpreterLiteral::Number(42.0), InterpreterLiteral::Number(42.0));
-        assert_ne!(InterpreterLiteral::Number(42.0), InterpreterLiteral::Number(42.1));
+        assert_eq!(Ok(InterpreterLiteral::Number(42.0)), execute("42"));
+        assert_ne!(Ok(InterpreterLiteral::Number(42.0)), execute("42.1"));
         assert_eq!(Ok(InterpreterLiteral::String("asdf".to_string())), execute("\"asdf\""));
         assert_ne!(Ok(InterpreterLiteral::String("asdf".to_string())), execute("\"asd\""));
         assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("true"));
@@ -437,47 +406,30 @@ mod tests {
         assert_eq!(Ok(InterpreterLiteral::Nil), execute("nil"));
     }
 
-    fn execute(script: &str) -> Result<InterpreterLiteral, &'static str> {
-        let mut scanner = Scanner::init(&format!("print {};", script));
-        let (tokens, errors) = scanner.scan_tokens();
-        assert_eq!(0, errors.len());
+    fn execute(script: &str) -> Result<InterpreterLiteral, String> {
+        let script = &format!("print {};", script);
 
-        let mut parser = Parser::init(tokens);
-        let parsed = parser.parse().unwrap();
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
-        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
+
+        let mut front_end = super::super::FrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
-        }))));
-
-        let mut resolver = Resolver::init(&interpreter);
-
-        assert_ok!(resolver.resolve_statements(&parsed));
-
-        interpreter.borrow_mut().execute(&parsed)?;
+        }));
+        front_end.execute_script(script)?;
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
     }
 
-    fn execute_with_redirect(script: &str) -> Result<InterpreterLiteral, &'static str> {
-        let mut scanner = Scanner::init(script);
-        let (tokens, errors) = scanner.scan_tokens();
-        assert_eq!(0, errors.len());
-
-        let mut parser = Parser::init(tokens);
-        let parsed = parser.parse().unwrap();
+    fn execute_with_redirect(script: &str) -> Result<InterpreterLiteral, String> {
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
 
-        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(move |p: &InterpreterLiteral| {
+        let mut front_end = super::super::FrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
-        }))));
+        }));
+        front_end.execute_script(script)?;
 
-        let mut resolver = Resolver::init(&interpreter);
-        assert_ok!(resolver.resolve_statements(&parsed));
-
-        interpreter.borrow_mut().execute(&parsed)?;
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
     }
@@ -496,34 +448,22 @@ mod tests {
         assert_eq!(Err(expected_error), resolver.resolve_statements(&parsed));
     }
 
-    fn execute_no_redirect(script: &str) -> Result<(), &'static str> {
-        let mut scanner = Scanner::init(script);
-        let (tokens, errors) = scanner.scan_tokens();
-        assert_eq!(0, errors.len());
-
-        let mut parser = Parser::init(tokens);
-        let parsed = parser.parse().unwrap();
-        let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|_| {}))));
-
-        let mut resolver = Resolver::init(&interpreter);
-        assert_ok!(resolver.resolve_statements(&parsed));
-
-        interpreter.borrow_mut().execute(&parsed)?;
-
-        Ok(())
+    fn execute_no_redirect(script: &str) -> Result<(), String> {
+        let mut front_end = super::super::FrontEnd::init(Box::new(|_| {}));
+        front_end.execute_script(script)
     }
 
     #[test]
     fn single_values() {
-        assert_eq!(InterpreterLiteral::Number(42.0), execute("42").ok().unwrap());
-        assert_eq!(InterpreterLiteral::String("asdf".to_string()), execute("\"asdf\"").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("true").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Nil, execute("nil").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Number(42.0)), execute("42"));
+        assert_eq!(Ok(InterpreterLiteral::String("asdf".to_string())), execute("\"asdf\""));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("true"));
+        assert_eq!(Ok(InterpreterLiteral::Nil), execute("nil"));
     }
 
     #[test]
     fn negative() {
-        assert_eq!(InterpreterLiteral::Number(-42.0), execute("-42").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Number(-42.0)), execute("-42"));
         assert!(execute("-\"asdf\"").is_err());
         assert!(execute("-nil").is_err());
         assert!(execute("-false").is_err());
@@ -531,20 +471,20 @@ mod tests {
 
     #[test]
     fn bang() {
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("!false").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("!true").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("!nil").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("!42").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("!\"a\"").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("!false"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("!true"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("!nil"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("!42"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("!\"a\""));
     }
 
     #[test]
     fn binary() {
-        assert_eq!(InterpreterLiteral::Number(5.0), execute("3 + 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::String("32".to_string()), execute("\"3\" + \"2\"").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Number(1.0), execute("3 - 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Number(2.0), execute("4 / 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Number(8.0), execute("4 * 2").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Number(5.0)), execute("3 + 2"));
+        assert_eq!(Ok(InterpreterLiteral::String("32".to_string())), execute("\"3\" + \"2\""));
+        assert_eq!(Ok(InterpreterLiteral::Number(1.0)), execute("3 - 2"));
+        assert_eq!(Ok(InterpreterLiteral::Number(2.0)), execute("4 / 2"));
+        assert_eq!(Ok(InterpreterLiteral::Number(8.0)), execute("4 * 2"));
         assert!(execute("4 * false").is_err());
         assert!(execute("4 / nil").is_err());
         assert!(execute("4 - nil").is_err());
@@ -554,23 +494,23 @@ mod tests {
 
     #[test]
     fn comparison() {
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("3 > 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("1 >= 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 <= 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("3 < 4").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("3 > 2"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("1 >= 2"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("3 <= 2"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("3 < 4"));
         assert!(execute("3 < false").is_err());
         assert!(execute("3 >= nil").is_err());
 
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("3 != 2").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("false == true").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("false != true").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("\"a\" == \"b\"").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("\"a\" != \"b\"").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == false").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == nil").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(false), execute("3 == \"3\"").ok().unwrap());
-        assert_eq!(InterpreterLiteral::Boolean(true), execute("nil == nil").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("3 == 2"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("3 != 2"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("false == true"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("false != true"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("\"a\" == \"b\""));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("\"a\" != \"b\""));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("3 == false"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("3 == nil"));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(false)), execute("3 == \"3\""));
+        assert_eq!(Ok(InterpreterLiteral::Boolean(true)), execute("nil == nil"));
     }
 
     #[test]
@@ -589,11 +529,8 @@ mod tests {
 
     #[test]
     fn assignment() {
-        assert_eq!(
-            InterpreterLiteral::Number(6.0),
-            execute_with_redirect("var x = 5; x = 6; print x;").ok().unwrap()
-        );
-        assert_eq!(InterpreterLiteral::Number(6.0), execute_with_redirect("var x; x = 6; print x;").ok().unwrap());
+        assert_eq!(Ok(InterpreterLiteral::Number(6.0)), execute_with_redirect("var x = 5; x = 6; print x;"));
+        assert_eq!(Ok(InterpreterLiteral::Number(6.0)), execute_with_redirect("var x; x = 6; print x;"));
         assert!(execute_with_redirect("x = 6; print x;").is_err());
     }
 
@@ -634,41 +571,38 @@ print c;"#,
     #[test]
     fn conditional() {
         assert_eq!(
-            InterpreterLiteral::Boolean(false),
-            execute_with_redirect("if (true == false) { print true; } else { print false; }").ok().unwrap()
+            Ok(InterpreterLiteral::Boolean(false)),
+            execute_with_redirect("if (true == false) { print true; } else { print false; }")
         );
 
         assert_eq!(
-            InterpreterLiteral::Boolean(true),
-            execute_with_redirect("if (true == true) { print true; } else { print false; }").ok().unwrap()
+            Ok(InterpreterLiteral::Boolean(true)),
+            execute_with_redirect("if (true == true) { print true; } else { print false; }")
         );
 
-        assert_eq!(
-            InterpreterLiteral::Nil,
-            execute_with_redirect("if (true == false) { print true; }").ok().unwrap()
-        );
+        assert_eq!(Ok(InterpreterLiteral::Nil), execute_with_redirect("if (true == false) { print true; }"));
     }
 
     #[test]
     fn conditional_logical() {
         assert_eq!(
-            InterpreterLiteral::Boolean(false),
-            execute_with_redirect("if (true and false) { print true; } else { print false; }").ok().unwrap()
+            Ok(InterpreterLiteral::Boolean(false)),
+            execute_with_redirect("if (true and false) { print true; } else { print false; }")
         );
         assert_eq!(
-            InterpreterLiteral::Boolean(false),
-            execute_with_redirect("if (false or false) { print true; } else { print false; }").ok().unwrap()
+            Ok(InterpreterLiteral::Boolean(false)),
+            execute_with_redirect("if (false or false) { print true; } else { print false; }")
         );
         assert_eq!(
-            InterpreterLiteral::Boolean(true),
-            execute_with_redirect("if (true and true) { print true; } else { print false; }").ok().unwrap()
+            Ok(InterpreterLiteral::Boolean(true)),
+            execute_with_redirect("if (true and true) { print true; } else { print false; }")
         );
     }
 
     #[test]
     fn while_loop() {
         assert_eq!(
-            InterpreterLiteral::Number(10.0),
+            Ok(InterpreterLiteral::Number(10.0)),
             execute_with_redirect(
                 "
             var x = 0;
@@ -679,8 +613,6 @@ print c;"#,
             print x;
 "
             )
-            .ok()
-            .unwrap()
         );
     }
 
@@ -707,7 +639,7 @@ for (var b = 1; a < 10000; b = temp + b) {
     pub fn callables() {
         assert!(execute_with_redirect("\"asdf\"();").is_err());
         assert_eq!(
-            InterpreterLiteral::Number(3.0),
+            Ok(InterpreterLiteral::Number(3.0)),
             execute_with_redirect(
                 "
             fun count(n) {
@@ -718,12 +650,10 @@ for (var b = 1; a < 10000; b = temp + b) {
             count(3);
 "
             )
-            .ok()
-            .unwrap()
         );
 
         assert_eq!(
-            InterpreterLiteral::Number(6.0),
+            Ok(InterpreterLiteral::Number(6.0)),
             execute_with_redirect(
                 "
                 fun add(a, b, c) {
@@ -733,12 +663,10 @@ for (var b = 1; a < 10000; b = temp + b) {
                   add(1, 2, 3);
 "
             )
-            .ok()
-            .unwrap()
         );
 
         assert_eq!(
-            InterpreterLiteral::String("Hi, Dear Reader!".to_string()),
+            Ok(InterpreterLiteral::String("Hi, Dear Reader!".to_string())),
             execute_with_redirect(
                 r#"
                 fun sayHi(first, last) {
@@ -748,14 +676,12 @@ for (var b = 1; a < 10000; b = temp + b) {
                 sayHi("Dear", "Reader");   
 "#
             )
-            .ok()
-            .unwrap()
         );
     }
 
     #[test]
     pub fn call_primitive() {
-        assert!(matches!(execute_with_redirect("print clock();").ok().unwrap(), InterpreterLiteral::Number(_)));
+        assert!(matches!(execute_with_redirect("print clock();"), Ok(InterpreterLiteral::Number(_))));
         assert!(execute_with_redirect("clock(nil);").is_err());
     }
 
