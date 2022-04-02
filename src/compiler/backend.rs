@@ -7,12 +7,12 @@ use crate::{
 
 use super::compiler::Compiler;
 
-pub struct CompilerBackEnd {
-    compiler: Compiler,
+pub struct CompilerBackEnd<'a> {
+    compiler: Compiler<'a>,
     print: Box<dyn FnMut(&str)>,
 }
 
-impl BackEnd for CompilerBackEnd {
+impl<'a> BackEnd for CompilerBackEnd<'a> {
     fn execute_single_line(&mut self, _line: &str) -> Result<()> {
         todo!()
     }
@@ -33,8 +33,8 @@ impl BackEnd for CompilerBackEnd {
     }
 }
 
-impl CompilerBackEnd {
-    pub fn init(print: Box<dyn FnMut(&str)>) -> CompilerBackEnd {
+impl<'a> CompilerBackEnd<'a> {
+    pub fn init(print: Box<dyn FnMut(&str)>) -> CompilerBackEnd<'a> {
         CompilerBackEnd {
             compiler: Compiler::init(),
             print,

@@ -1,45 +1,97 @@
-use anyhow::{Context, Result};
+use std::collections::HashMap;
+
+use anyhow::{anyhow, Result};
 use wasm_encoder::*;
 
 use crate::parser::{ChildExpression, ChildStatement, Expression, Statement, Token, TokenLiteral};
 
-pub struct Compiler {
+pub struct CompileContext<'a> {
+    pub name: String,
+    pub params: Vec<Token>,
+    pub locals: Vec<TokenLiteral>,
+    pub return_value: Option<Token>,
+    pub instructions: Vec<Instruction<'a>>,
+}
+
+impl<'a> CompileContext<'a> {
+    pub fn init(name: &str) -> Self {
+        CompileContext {
+            name: name.to_string(),
+            params: vec![],
+            locals: vec![],
+            return_value: None,
+            instructions: vec![],
+        }
+    }
+
+    pub fn init_with_params(name: &str, params: &Vec<Token>) -> Self {
+        CompileContext {
+            name: name.to_string(),
+            params: params.to_vec(),
+            locals: vec![],
+            return_value: None,
+            instructions: vec![],
+        }
+    }
+}
+
+pub struct Compiler<'a> {
     module: Module,
-    start: Function,
     types: TypeSection,
     imports: ImportSection,
     functions: FunctionSection,
+    codes: CodeSection,
+    start_id: Option<u32>,
+
+    current_index: u32, // How far are we into the various tables we're walking lockstep
+
+    context: CompileContext<'a>,
+    function_names: HashMap<String, u32>,
 }
 
-impl Compiler {
+impl<'a> Compiler<'a> {
     pub fn init() -> Self {
         Compiler {
             module: Module::new(),
-            start: Function::new(vec![]),
             types: TypeSection::new(),
             imports: ImportSection::new(),
             functions: FunctionSection::new(),
+            codes: CodeSection::new(),
+            start_id: None,
+            context: CompileContext::init("start"),
+            function_names: HashMap::new(),
+            current_index: 0,
         }
     }
 
     pub fn compile(&mut self, statements: &Vec<ChildStatement>) -> Result<Vec<u8>> {
         self.initialize_compile();
 
-        self.resolve_list_of_statements(statements)?;
+        self.compile_list_of_statements(statements)?;
 
         self.finalize_compile()
     }
 
     fn initialize_compile(&mut self) {
-        self.imports.import("imports", Some("clock_func"), EntityType::Function(0));
+        self.imports.import("imports", Some("clock"), EntityType::Function(self.current_index));
         self.types.function(vec![], vec![ValType::F64]);
+        self.function_names.insert("clock".to_string(), self.current_index);
+        self.current_index += 1;
 
-        self.imports.import("imports", Some("log_str"), EntityType::Function(1));
+        self.imports.import("imports", Some("log_str"), EntityType::Function(self.current_index));
         self.types.function(vec![ValType::I32, ValType::I32], vec![]);
+        self.function_names.insert("log_str".to_string(), self.current_index);
+        self.current_index += 1;
+
+        self.imports.import("imports", Some("log_num"), EntityType::Function(self.current_index));
+        self.types.function(vec![ValType::F64], vec![]);
+        self.function_names.insert("log_num".to_string(), self.current_index);
+        self.current_index += 1;
     }
 
     fn finalize_compile(&mut self) -> Result<Vec<u8>> {
-        self.write_sections();
+        self.write_start();
+        self.write_all_sections();
 
         let wasm_bytes = self.generate_binary();
         // std::fs::write("/Users/donblas/tmp/mine.wasm", &wasm_bytes)?;
@@ -50,12 +102,17 @@ impl Compiler {
         Ok(wasm_bytes.to_vec())
     }
 
+    fn write_start(&mut self) {
+        self.start_id = Some(self.current_index);
+        self.finish_function();
+    }
+
     fn generate_binary(&mut self) -> Vec<u8> {
         let final_module = std::mem::replace(&mut self.module, Module::new());
         final_module.finish()
     }
 
-    fn write_sections(&mut self) {
+    fn write_all_sections(&mut self) {
         // Section Order - This ordering matters, though we don't use every section today, they are left for future use (and ordering)
 
         // typesec
@@ -69,107 +126,169 @@ impl Compiler {
         // globalsec
         // exportsec
         // startsec
+        if let Some(start_id) = &self.start_id {
+            self.module.section(&StartSection { function_index: *start_id });
+        }
+
         // elemsec
         // datacountsec
         // codesec
+        self.module.section(&self.codes);
         // datasec
     }
 
-    fn resolve_local(&mut self, expr: &ChildExpression, name: &Token) -> Result<()> {
+    fn finish_function(&mut self) {
+        // Finish off function with end instruction
+        self.context.instructions.push(Instruction::End);
+
+        self.functions.function(self.current_index);
+
+        // Assume all params are f64
+        self.types.function(self.context.params.iter().map(|_| ValType::F64), vec![]);
+
+        let mut f = Function::new(vec![]);
+        for instruction in &self.context.instructions {
+            f.instruction(instruction.clone());
+        }
+        self.codes.function(&f);
+
+        self.current_index += 1;
+    }
+
+    fn compile_local(&mut self, expr: &ChildExpression, name: &Token) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_function(&mut self, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<()> {
+    fn compile_list_of_statements(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
+        for statement in statements {
+            self.compile_statement(statement)?;
+        }
         Ok(())
     }
 
-    fn resolve_list_of_statements(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
+    fn compile_statements(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_statements(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
-        Ok(())
-    }
-
-    fn resolve_statement(&mut self, node: &ChildStatement) -> Result<()> {
+    fn compile_statement(&mut self, node: &ChildStatement) -> Result<()> {
         if let Some(node) = node {
             match &**node {
-                Statement::Block { statements } => self.resolve_statements(statements),
-                Statement::Variable { name, initializer } => self.resolve_variable_statement(name, initializer),
-                Statement::Function { body, name, params } => self.resolve_function_declaration(name, params, body),
-                Statement::Expression { expression } => self.resolve_expression(expression),
+                Statement::Block { statements } => self.compile_statements(statements),
+                Statement::Variable { name, initializer } => self.compile_variable_statement(name, initializer),
+                Statement::Function { body, name, params } => self.compile_function_declaration(name, params, body),
+                Statement::Expression { expression } => self.compile_expression(expression),
                 Statement::If {
                     condition,
                     then_branch,
                     else_branch,
-                } => self.resolve_conditional_statement(condition, then_branch, else_branch),
-                Statement::Print { expression } => self.resolve_expression(expression),
-                Statement::Return { value } => self.resolve_return_statement(value),
-                Statement::While { condition, body } => self.resolve_while_statement(condition, body),
+                } => self.compile_conditional_statement(condition, then_branch, else_branch),
+                Statement::Print { expression } => self.compile_print_statement(expression),
+                Statement::Return { value } => self.compile_return_statement(value),
+                Statement::While { condition, body } => self.compile_while_statement(condition, body),
             }
         } else {
             Ok(())
         }
     }
 
-    fn resolve_return_statement(&mut self, value: &ChildExpression) -> Result<()> {
+    fn compile_print_statement(&mut self, value: &ChildExpression) -> Result<()> {
+        self.compile_expression(value)?;
+
+        let function_index = self.function_names.get("log_num").ok_or_else(|| anyhow!("Unable to find print function"))?;
+        self.context.instructions.push(Instruction::Call(*function_index));
+
         Ok(())
     }
 
-    fn resolve_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<()> {
+    fn compile_return_statement(&mut self, value: &ChildExpression) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_conditional_statement(&mut self, condition: &ChildExpression, then_branch: &ChildStatement, else_branch: &Option<ChildStatement>) -> Result<()> {
+    fn compile_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<()> {
+    fn compile_conditional_statement(&mut self, condition: &ChildExpression, then_branch: &ChildStatement, else_branch: &Option<ChildStatement>) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_expression(&mut self, node: &ChildExpression) -> Result<()> {
+    fn compile_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<()> {
+        let new_context = CompileContext::init_with_params(&name.lexme, &params);
+        let previous_context = std::mem::replace(&mut self.context, new_context);
+
+        self.compile_list_of_statements(body)?;
+
+        self.finish_function();
+
+        self.context = previous_context;
+
+        Ok(())
+    }
+
+    fn compile_expression(&mut self, node: &ChildExpression) -> Result<()> {
         if let Some(n) = node {
             match &**n {
-                Expression::Variable { name } => self.resolve_variable_expression(name, node),
-                Expression::Assign { name, value } => self.resolve_assign_expression(name, value, node),
-                Expression::Binary { left, right, .. } => self.resolve_binary(left, right),
-                Expression::Call { callee, arguments } => self.resolve_call_expression(callee, arguments),
-                Expression::Grouping { expression } => self.resolve_expression(expression),
-                Expression::Literal { value } => self.resolve_literal(value),
-                Expression::Logical { left, right, .. } => self.resolve_logical(left, right),
-                Expression::Unary { right, .. } => self.resolve_expression(right),
+                Expression::Variable { name } => self.compile_variable_expression(name, node),
+                Expression::Assign { name, value } => self.compile_assign_expression(name, value, node),
+                Expression::Binary { left, right, .. } => self.compile_binary(left, right),
+                Expression::Call { callee, arguments } => self.compile_call_expression(callee, arguments),
+                Expression::Grouping { expression } => self.compile_expression(expression),
+                Expression::Literal { value } => self.compile_literal(value),
+                Expression::Logical { left, right, .. } => self.compile_logical(left, right),
+                Expression::Unary { right, .. } => self.compile_expression(right),
             }
         } else {
             Ok(())
         }
     }
 
-    fn resolve_literal(&mut self, literal: &TokenLiteral) -> Result<()> {
+    fn compile_literal(&mut self, literal: &TokenLiteral) -> Result<()> {
+        match literal {
+            TokenLiteral::Nil => todo!(),
+            TokenLiteral::String(_) => todo!(),
+            TokenLiteral::Number(n) => self.context.instructions.push(Instruction::F64Const(n.value())),
+            TokenLiteral::Boolean(_) => todo!(),
+        }
         Ok(())
     }
 
-    fn resolve_logical(&mut self, left: &ChildExpression, right: &ChildExpression) -> Result<()> {
+    fn compile_logical(&mut self, left: &ChildExpression, right: &ChildExpression) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_call_expression(&mut self, callee: &ChildExpression, arguments: &Vec<ChildExpression>) -> Result<()> {
+    fn compile_call_expression(&mut self, callee: &ChildExpression, arguments: &Vec<ChildExpression>) -> Result<()> {
+        let function = match &*callee.as_ref().unwrap().as_ref() {
+            Expression::Literal { value } => Ok(value),
+            _ => Err(anyhow!("Invalid call expression")),
+        }?;
+
+        let function_name = match function {
+            TokenLiteral::String(s) => Ok(s),
+            _ => Err(anyhow!("Invalid call name")),
+        }?;
+
+        let function_index = self
+            .function_names
+            .get(function_name)
+            .ok_or_else(|| anyhow!("Unable to find function already defined"))?;
+        self.context.instructions.push(Instruction::Call(*function_index));
+
         Ok(())
     }
 
-    fn resolve_binary(&mut self, left: &ChildExpression, right: &ChildExpression) -> Result<()> {
+    fn compile_binary(&mut self, left: &ChildExpression, right: &ChildExpression) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_assign_expression(&mut self, name: &Token, value: &ChildExpression, node: &ChildExpression) -> Result<()> {
+    fn compile_assign_expression(&mut self, name: &Token, value: &ChildExpression, node: &ChildExpression) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_variable_expression(&mut self, name: &Token, node: &ChildExpression) -> Result<()> {
+    fn compile_variable_expression(&mut self, name: &Token, node: &ChildExpression) -> Result<()> {
         Ok(())
     }
 
-    fn resolve_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<()> {
+    fn compile_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<()> {
         Ok(())
     }
 }
@@ -199,6 +318,7 @@ mod tests {
 
     #[test]
     fn single_values() {
-        assert_eq!(Ok("42.0".to_string()), execute("42"));
+        assert_eq!(Ok("42.2".to_string()), execute("42.2"));
+        assert_eq!(Ok("2".to_string()), execute("2"));
     }
 }

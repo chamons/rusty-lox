@@ -21,7 +21,7 @@ pub fn execute(binary: &[u8], print: &mut Box<dyn FnMut(&str)>) -> Result<()> {
     let state = RuntimeState::init();
     let mut store = Store::new(&engine, state);
 
-    let clock_func = Func::wrap(&mut store, || -> f64 {
+    let clock = Func::wrap(&mut store, || -> f64 {
         SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64()
     });
 
@@ -44,7 +44,12 @@ pub fn execute(binary: &[u8], print: &mut Box<dyn FnMut(&str)>) -> Result<()> {
         Ok(())
     });
 
-    let imports = [clock_func.into(), log_str.into()];
+    let log_num = Func::wrap(&mut store, |mut caller: Caller<'_, RuntimeState>, num: f64| {
+        caller.data_mut().logs.push(format!("{}", num));
+        Ok(())
+    });
+
+    let imports = [clock.into(), log_str.into(), log_num.into()];
 
     // This executes the start() function
     Instance::new(&mut store, &module, &imports)?;
