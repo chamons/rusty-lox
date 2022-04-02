@@ -9,6 +9,10 @@ impl Compiler {
         Compiler {}
     }
 
+    pub fn compile(&mut self, statements: &Vec<ChildStatement>) -> Vec<u8> {
+        vec![]
+    }
+
     fn resolve_local(&mut self, expr: &ChildExpression, name: &Token) -> Result<()> {
         Ok(())
     }
@@ -21,7 +25,7 @@ impl Compiler {
         Ok(())
     }
 
-    pub fn resolve_statements(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
+    fn resolve_statements(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
         Ok(())
     }
 
