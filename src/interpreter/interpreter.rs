@@ -4,6 +4,8 @@ use std::fmt;
 use std::mem;
 use std::rc::Rc;
 
+use anyhow::{anyhow, Result};
+
 use float_cmp::approx_eq;
 
 use super::{call, call::UserFunction, environment::Environment};
@@ -57,17 +59,17 @@ impl PartialEq for InterpreterLiteral {
 }
 impl Eq for InterpreterLiteral {}
 
-fn expect_literal(value: &InterpreterLiteral) -> Result<f64, &'static str> {
+fn expect_literal(value: &InterpreterLiteral) -> Result<f64> {
     match value {
         InterpreterLiteral::Number(v) => Ok(*v),
-        _ => Err("Operand must be a number"),
+        _ => Err(anyhow!("Operand must be a number")),
     }
 }
 
-fn expect_string<'a>(value: &'a InterpreterLiteral) -> Result<&'a str, &'static str> {
+fn expect_string<'a>(value: &'a InterpreterLiteral) -> Result<&'a str> {
     match value {
         InterpreterLiteral::String(v) => Ok(v),
-        _ => Err("Operand must be a string"),
+        _ => Err(anyhow!("Operand must be a string")),
     }
 }
 
@@ -117,19 +119,19 @@ impl Interpreter {
         self.current_function_offset = 1;
     }
 
-    pub fn resolve(&mut self, expr: &ChildExpression, depth: usize) -> Result<(), &'static str> {
+    pub fn resolve(&mut self, expr: &ChildExpression, depth: usize) -> Result<()> {
         self.locals.insert(expr.clone(), depth);
         Ok(())
     }
 
-    pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<(), &'static str> {
+    pub fn execute(&mut self, statements: &Vec<ChildStatement>) -> Result<()> {
         for statement in statements {
             self.execute_statement(statement)?;
         }
         Ok(())
     }
 
-    pub fn execute_binary(&mut self, left: &ChildExpression, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_binary(&mut self, left: &ChildExpression, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral> {
         let left = self.execute_expression(left)?;
         let right = self.execute_expression(right)?;
         match operator.kind {
@@ -139,7 +141,7 @@ impl Interpreter {
                 } else if matches!(left, InterpreterLiteral::String(_)) && matches!(right, InterpreterLiteral::String(_)) {
                     Ok(InterpreterLiteral::String(format!("{}{}", expect_string(&left)?, expect_string(&right)?)))
                 } else {
-                    Err("Invalid addition operator arguments")
+                    Err(anyhow!("Invalid addition operator arguments"))
                 }
             }
             TokenKind::Minus => Ok(InterpreterLiteral::Number(expect_literal(&left)? - expect_literal(&right)?)),
@@ -151,11 +153,11 @@ impl Interpreter {
             TokenKind::LessEqual => Ok(InterpreterLiteral::Boolean(expect_literal(&left)? <= expect_literal(&right)?)),
             TokenKind::EqualEqual => Ok(InterpreterLiteral::Boolean(left == right)),
             TokenKind::BangEqual => Ok(InterpreterLiteral::Boolean(left != right)),
-            _ => Err("Invalid binary operator"),
+            _ => Err(anyhow!("Invalid binary operator")),
         }
     }
 
-    pub fn execute_call_expression(&mut self, callee: &ChildExpression, arguments: &Vec<ChildExpression>) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_call_expression(&mut self, callee: &ChildExpression, arguments: &Vec<ChildExpression>) -> Result<InterpreterLiteral> {
         let callee = self.execute_expression(callee)?;
 
         let mut expressed_args = vec![];
@@ -168,7 +170,7 @@ impl Interpreter {
                 Some(fun) => {
                     let fun = Rc::clone(fun);
                     if fun.borrow().arity() != arguments.len() as u32 {
-                        Err("Unexpected number of function arguments.")
+                        Err(anyhow!("Unexpected number of function arguments."))
                     } else {
                         let callee = fun.borrow().duplicate();
                         // Need to complete our early return hack here
@@ -178,7 +180,7 @@ impl Interpreter {
                         match callee.call(self, &expressed_args) {
                             Ok(v) => Ok(v),
                             Err(e) => {
-                                if e == Interpreter::EARLY_RETURN_NOT_AN_ERROR {
+                                if e.to_string().contains(Interpreter::EARLY_RETURN_NOT_AN_ERROR) {
                                     let real_return_value = self.early_return.take();
                                     Ok(real_return_value.unwrap_or(InterpreterLiteral::Nil))
                                 } else {
@@ -188,18 +190,13 @@ impl Interpreter {
                         }
                     }
                 }
-                None => Err("Undefined function lookup."),
+                None => Err(anyhow!("Undefined function lookup.")),
             },
-            _ => Err("Can only call functions and classes."),
+            _ => Err(anyhow!("Can only call functions and classes.")),
         }
     }
 
-    pub fn execute_logical_expression(
-        &mut self,
-        left: &ChildExpression,
-        operator: &Token,
-        right: &ChildExpression,
-    ) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_logical_expression(&mut self, left: &ChildExpression, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral> {
         let left = self.execute_expression(left)?;
 
         if operator.kind == TokenKind::Or {
@@ -215,12 +212,7 @@ impl Interpreter {
         self.execute_expression(right)
     }
 
-    pub fn execute_assign_expression(
-        &mut self,
-        name: &Token,
-        expression_value: &ChildExpression,
-        node: &ChildExpression,
-    ) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_assign_expression(&mut self, name: &Token, expression_value: &ChildExpression, node: &ChildExpression) -> Result<InterpreterLiteral> {
         let value = self.execute_expression(expression_value)?;
 
         if let Some(distance) = self.locals.get(node) {
@@ -232,7 +224,7 @@ impl Interpreter {
         Ok(value)
     }
 
-    pub fn execute_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<InterpreterLiteral> {
         let value = if initializer.is_some() {
             self.execute_expression(initializer)?
         } else {
@@ -244,7 +236,7 @@ impl Interpreter {
         Ok(InterpreterLiteral::Nil)
     }
 
-    pub fn execute_print_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_print_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral> {
         let value = self.execute_expression(expression)?;
         (self.print)(&value);
         Ok(InterpreterLiteral::Nil)
@@ -252,12 +244,12 @@ impl Interpreter {
 
     const EARLY_RETURN_NOT_AN_ERROR: &'static str = "early-return";
 
-    pub fn execute_return_statement(&mut self, value: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_return_statement(&mut self, value: &ChildExpression) -> Result<InterpreterLiteral> {
         self.early_return = if value.is_some() { Some(self.execute_expression(value)?) } else { None };
-        Err(Interpreter::EARLY_RETURN_NOT_AN_ERROR)
+        Err(anyhow!(Interpreter::EARLY_RETURN_NOT_AN_ERROR))
     }
 
-    pub fn execute_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<InterpreterLiteral> {
         let function = Rc::new(RefCell::new(UserFunction::init(name, params, body, &self.environment)));
         self.functions.insert(self.current_function_offset, function);
         self.environment
@@ -267,7 +259,7 @@ impl Interpreter {
         Ok(InterpreterLiteral::Nil)
     }
 
-    pub fn execute_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_while_statement(&mut self, condition: &ChildExpression, body: &ChildStatement) -> Result<InterpreterLiteral> {
         while is_truthy(&self.execute_expression(condition)?) {
             self.execute_statement(body)?;
         }
@@ -279,7 +271,7 @@ impl Interpreter {
         condition: &ChildExpression,
         then_branch: &ChildStatement,
         else_branch: &Option<ChildStatement>,
-    ) -> Result<InterpreterLiteral, &'static str> {
+    ) -> Result<InterpreterLiteral> {
         if is_truthy(&self.execute_expression(condition)?) {
             self.execute_statement(then_branch)?;
         } else if let Some(else_branch) = else_branch {
@@ -288,12 +280,12 @@ impl Interpreter {
         Ok(InterpreterLiteral::Nil)
     }
 
-    pub fn execute_block_statement(&mut self, statements: &Vec<ChildStatement>) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_block_statement(&mut self, statements: &Vec<ChildStatement>) -> Result<InterpreterLiteral> {
         self.execute_block(statements, Rc::new(RefCell::new(Environment::init_with_parent(&self.environment))))?;
         Ok(InterpreterLiteral::Nil)
     }
 
-    pub fn execute_block(&mut self, statements: &Vec<ChildStatement>, environment: Rc<RefCell<Environment>>) -> Result<(), &'static str> {
+    pub fn execute_block(&mut self, statements: &Vec<ChildStatement>, environment: Rc<RefCell<Environment>>) -> Result<()> {
         let previous = mem::replace(&mut self.environment, environment);
 
         for statement in statements {
@@ -308,16 +300,16 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn execute_expression_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_expression_statement(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral> {
         self.execute_expression(expression)?;
         Ok(InterpreterLiteral::Nil)
     }
 
-    pub fn execute_grouping(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_grouping(&mut self, expression: &ChildExpression) -> Result<InterpreterLiteral> {
         self.execute_expression(expression)
     }
 
-    pub fn execute_literal(&mut self, value: &TokenLiteral) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_literal(&mut self, value: &TokenLiteral) -> Result<InterpreterLiteral> {
         match value {
             TokenLiteral::Nil => Ok(InterpreterLiteral::Nil),
             TokenLiteral::String(v) => Ok(InterpreterLiteral::String(v.to_string())),
@@ -326,16 +318,16 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_unary(&mut self, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_unary(&mut self, operator: &Token, right: &ChildExpression) -> Result<InterpreterLiteral> {
         let right = self.execute_expression(right)?;
         match operator.kind {
             TokenKind::Minus => Ok(InterpreterLiteral::Number(expect_literal(&right)? * -1.0)),
             TokenKind::Bang => Ok(InterpreterLiteral::Boolean(!is_truthy(&right))),
-            _ => Err("Invalid unary operator"),
+            _ => Err(anyhow!("Invalid unary operator")),
         }
     }
 
-    pub fn execute_expression(&mut self, expr: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_expression(&mut self, expr: &ChildExpression) -> Result<InterpreterLiteral> {
         if let Some(node) = expr {
             match &**node {
                 Expression::Binary { left, operator, right } => self.execute_binary(left, operator, right),
@@ -352,7 +344,7 @@ impl Interpreter {
         }
     }
 
-    pub fn lookup_variables(&mut self, name: &Token, node: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
+    pub fn lookup_variables(&mut self, name: &Token, node: &ChildExpression) -> Result<InterpreterLiteral> {
         let v = if let Some(distance) = self.locals.get(node) {
             Environment::get_at(&self.environment, *distance, &name.lexme)
         } else {
@@ -362,10 +354,10 @@ impl Interpreter {
             println!("!");
         }
 
-        v.ok_or("Unable to look variable")
+        v.ok_or_else(|| anyhow!("Unable to look variable"))
     }
 
-    pub fn execute_statement(&mut self, node: &ChildStatement) -> Result<InterpreterLiteral, &'static str> {
+    pub fn execute_statement(&mut self, node: &ChildStatement) -> Result<InterpreterLiteral> {
         if let Some(node) = node {
             match &**node {
                 Statement::Expression { expression } => self.execute_expression_statement(expression),
@@ -415,7 +407,7 @@ mod tests {
         let mut back_end = super::super::InterpreterBackEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
-        back_end.execute_script(script)?;
+        back_end.execute_script(script).map_err(|e| e.to_string())?;
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
@@ -428,7 +420,7 @@ mod tests {
         let mut back_end = super::super::InterpreterBackEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
-        back_end.execute_script(script)?;
+        back_end.execute_script(script).map_err(|e| e.to_string())?;
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
@@ -445,10 +437,10 @@ mod tests {
         let interpreter = Rc::new(RefCell::new(Interpreter::init(Box::new(|_| {}))));
 
         let mut resolver = Resolver::init(&interpreter);
-        assert_eq!(Err(expected_error), resolver.resolve_statements(&parsed));
+        assert!(resolver.resolve_statements(&parsed).unwrap_err().to_string().contains(expected_error));
     }
 
-    fn execute_no_redirect(script: &str) -> Result<(), String> {
+    fn execute_no_redirect(script: &str) -> Result<()> {
         let mut back_end = super::super::InterpreterBackEnd::init(Box::new(|_| {}));
         back_end.execute_script(script)
     }

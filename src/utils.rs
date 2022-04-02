@@ -1,8 +1,10 @@
+use anyhow::Result;
+
 use std::process::exit;
 
 pub trait BackEnd {
-    fn execute_single_line(&mut self, line: &str) -> Result<(), String>;
-    fn execute_script(&mut self, script: &str) -> Result<(), String>;
+    fn execute_single_line(&mut self, line: &str) -> Result<()>;
+    fn execute_script(&mut self, script: &str) -> Result<()>;
 }
 
 pub fn die(error: &str) -> ! {

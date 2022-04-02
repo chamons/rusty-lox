@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 use super::expressions::*;
 use super::statements::*;
 use super::tokens::{Token, TokenKind, TokenLiteral};
@@ -12,7 +14,7 @@ impl<'a> Parser<'a> {
         Parser { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<ChildStatement>, &'static str> {
+    pub fn parse(&mut self) -> Result<Vec<ChildStatement>> {
         let mut statements = vec![];
         while !self.at_end() {
             statements.push(self.declaration()?);
@@ -20,7 +22,7 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
-    pub fn parse_single_expression(&mut self) -> Result<ChildExpression, &'static str> {
+    pub fn parse_single_expression(&mut self) -> Result<ChildExpression> {
         self.expression()
     }
 
@@ -28,7 +30,7 @@ impl<'a> Parser<'a> {
         self.current = 0;
     }
 
-    fn declaration(&mut self) -> Result<ChildStatement, &'static str> {
+    fn declaration(&mut self) -> Result<ChildStatement> {
         let result = if self.match_token(TokenKind::Fun) {
             self.function_declaration()
         } else if self.match_token(TokenKind::Var) {
@@ -42,14 +44,14 @@ impl<'a> Parser<'a> {
         result
     }
 
-    fn function_declaration(&mut self) -> Result<ChildStatement, &'static str> {
+    fn function_declaration(&mut self) -> Result<ChildStatement> {
         let name = self.consume(TokenKind::Identifier, "Expected identifier")?.clone();
         self.consume(TokenKind::LeftParen, "Expect '(' after identifier.")?;
         let mut params = vec![];
         if !self.check(TokenKind::RightParen) {
             loop {
                 if params.len() > 255 {
-                    return Err("Can't have more than 255 parameters.");
+                    return Err(anyhow!("Can't have more than 255 parameters."));
                 }
                 params.push(self.consume(TokenKind::Identifier, "Expect parameter name.")?.clone());
                 if !self.match_token(TokenKind::Comma) {
@@ -63,7 +65,7 @@ impl<'a> Parser<'a> {
         Ok(create_function_statement(name, params, body))
     }
 
-    fn variable_declaration(&mut self) -> Result<ChildStatement, &'static str> {
+    fn variable_declaration(&mut self) -> Result<ChildStatement> {
         let name = self.consume(TokenKind::Identifier, "Expect variable name.")?.clone();
 
         let initializer = if self.match_token(TokenKind::Equal) { self.expression()? } else { None };
@@ -72,7 +74,7 @@ impl<'a> Parser<'a> {
         Ok(create_variable_statement(name, initializer))
     }
 
-    fn statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn statement(&mut self) -> Result<ChildStatement> {
         if self.match_token(TokenKind::For) {
             self.for_statement()
         } else if self.match_token(TokenKind::If) {
@@ -90,7 +92,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn block(&mut self) -> Result<Vec<ChildStatement>, &'static str> {
+    fn block(&mut self) -> Result<Vec<ChildStatement>> {
         let mut statements = vec![];
         while !self.check(TokenKind::RightBrace) && !self.at_end() {
             statements.push(self.declaration()?);
@@ -99,7 +101,7 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
-    fn for_statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn for_statement(&mut self) -> Result<ChildStatement> {
         self.consume(TokenKind::LeftParen, "Expect '(' after 'for'.")?;
 
         let initializer = if self.match_token(TokenKind::Semicolon) {
@@ -132,7 +134,7 @@ impl<'a> Parser<'a> {
         Ok(body)
     }
 
-    fn if_statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn if_statement(&mut self) -> Result<ChildStatement> {
         self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.")?;
         let condition = self.expression()?;
         self.consume(TokenKind::RightParen, "Expect ')' after if condition.")?;
@@ -143,13 +145,13 @@ impl<'a> Parser<'a> {
         Ok(create_if_statement(condition, then_branch, else_branch))
     }
 
-    fn return_statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn return_statement(&mut self) -> Result<ChildStatement> {
         let value = if !self.check(TokenKind::Semicolon) { self.expression()? } else { None };
         self.consume(TokenKind::Semicolon, "Expect ';' after return value")?;
         Ok(create_return_statement(value))
     }
 
-    fn while_statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn while_statement(&mut self) -> Result<ChildStatement> {
         self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
         self.consume(TokenKind::RightParen, "Expect ')' after condition.")?;
@@ -157,23 +159,23 @@ impl<'a> Parser<'a> {
         Ok(create_while_statement(condition, body))
     }
 
-    fn print_statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn print_statement(&mut self) -> Result<ChildStatement> {
         let value = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
         Ok(create_print_statement(value))
     }
 
-    fn expression_statement(&mut self) -> Result<ChildStatement, &'static str> {
+    fn expression_statement(&mut self) -> Result<ChildStatement> {
         let value = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after expression.")?;
         Ok(create_expression_statement(value))
     }
 
-    fn expression(&mut self) -> Result<ChildExpression, &'static str> {
+    fn expression(&mut self) -> Result<ChildExpression> {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Result<ChildExpression, &'static str> {
+    fn assignment(&mut self) -> Result<ChildExpression> {
         let expr = self.or()?;
 
         if self.match_token(TokenKind::Equal) {
@@ -181,16 +183,16 @@ impl<'a> Parser<'a> {
             return match expr {
                 Some(v) => match *v {
                     Expression::Variable { name } => Ok(create_assignment(name, value)),
-                    _ => Err("Invalid assignment target."),
+                    _ => Err(anyhow!("Invalid assignment target.")),
                 },
-                _ => Err("Invalid assignment target."),
+                _ => Err(anyhow!("Invalid assignment target.")),
             };
         }
 
         Ok(expr)
     }
 
-    fn or(&mut self) -> Result<ChildExpression, &'static str> {
+    fn or(&mut self) -> Result<ChildExpression> {
         let mut expr = self.and()?;
 
         while self.match_token(TokenKind::Or) {
@@ -202,7 +204,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn and(&mut self) -> Result<ChildExpression, &'static str> {
+    fn and(&mut self) -> Result<ChildExpression> {
         let mut expr = self.equality()?;
 
         while self.match_token(TokenKind::And) {
@@ -214,7 +216,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn equality(&mut self) -> Result<ChildExpression, &'static str> {
+    fn equality(&mut self) -> Result<ChildExpression> {
         let mut expr = self.comparison()?;
 
         while self.match_tokens(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
@@ -266,7 +268,7 @@ impl<'a> Parser<'a> {
         self.tokens.get((self.current - 1) as usize).unwrap()
     }
 
-    fn comparison(&mut self) -> Result<ChildExpression, &'static str> {
+    fn comparison(&mut self) -> Result<ChildExpression> {
         let mut expr = self.term()?;
         while self.match_tokens(&[TokenKind::Greater, TokenKind::GreaterEqual, TokenKind::Less, TokenKind::LessEqual]) {
             let operator = self.previous().clone();
@@ -276,7 +278,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn term(&mut self) -> Result<ChildExpression, &'static str> {
+    fn term(&mut self) -> Result<ChildExpression> {
         let mut expr = self.factor()?;
         while self.match_tokens(&[TokenKind::Minus, TokenKind::Plus]) {
             let operator = self.previous().clone();
@@ -286,7 +288,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn factor(&mut self) -> Result<ChildExpression, &'static str> {
+    fn factor(&mut self) -> Result<ChildExpression> {
         let mut expr = self.unary()?;
 
         while self.match_tokens(&[TokenKind::Slash, TokenKind::Star]) {
@@ -297,7 +299,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<ChildExpression, &'static str> {
+    fn unary(&mut self) -> Result<ChildExpression> {
         if self.match_tokens(&[TokenKind::Bang, TokenKind::Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
@@ -307,7 +309,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn call(&mut self) -> Result<ChildExpression, &'static str> {
+    fn call(&mut self) -> Result<ChildExpression> {
         let mut expr = self.primary()?;
         loop {
             if self.match_token(TokenKind::LeftParen) {
@@ -319,13 +321,13 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn finish_call(&mut self, callee: ChildExpression) -> Result<ChildExpression, &'static str> {
+    fn finish_call(&mut self, callee: ChildExpression) -> Result<ChildExpression> {
         let mut arguments = vec![];
 
         if !self.check(TokenKind::RightParen) {
             loop {
                 if arguments.len() >= 255 {
-                    return Err("Can't have more than 255 arguments.");
+                    return Err(anyhow!("Can't have more than 255 arguments."));
                 }
                 arguments.push(self.expression()?);
                 if !self.match_token(TokenKind::Comma) {
@@ -339,7 +341,7 @@ impl<'a> Parser<'a> {
         Ok(create_call(callee, arguments))
     }
 
-    fn primary(&mut self) -> Result<ChildExpression, &'static str> {
+    fn primary(&mut self) -> Result<ChildExpression> {
         if self.match_token(TokenKind::False) {
             Ok(create_literal(TokenLiteral::Boolean(false)))
         } else if self.match_token(TokenKind::True) {
@@ -356,16 +358,16 @@ impl<'a> Parser<'a> {
                 self.consume(TokenKind::RightParen, "Expect ')' after expression")?;
                 Ok(create_grouping(expr))
             } else {
-                Err("Expect expression.")
+                Err(anyhow!("Expect expression."))
             }
         }
     }
 
-    fn consume(&mut self, kind: TokenKind, message: &'static str) -> Result<&Token, &'static str> {
+    fn consume(&mut self, kind: TokenKind, message: &'static str) -> Result<&Token> {
         if self.check(kind) {
             Ok(self.advance())
         } else {
-            Err(message)
+            Err(anyhow!(message))
         }
     }
 

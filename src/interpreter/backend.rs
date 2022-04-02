@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
@@ -13,11 +15,11 @@ pub struct InterpreterBackEnd {
 }
 
 impl BackEnd for InterpreterBackEnd {
-    fn execute_single_line(&mut self, line: &str) -> Result<(), String> {
+    fn execute_single_line(&mut self, line: &str) -> Result<()> {
         let mut scanner = Scanner::init(line);
         let (tokens, errors) = scanner.scan_tokens();
         if errors.len() > 0 {
-            return Err(format!("{:?}", errors));
+            return Err(anyhow!(format!("{:?}", errors)));
         }
         let mut parser = Parser::init(tokens);
         match parser.parse() {
@@ -36,11 +38,11 @@ impl BackEnd for InterpreterBackEnd {
         Ok(())
     }
 
-    fn execute_script(&mut self, script: &str) -> Result<(), String> {
+    fn execute_script(&mut self, script: &str) -> Result<()> {
         let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         if errors.len() > 0 {
-            return Err(format!("{:?}", errors));
+            return Err(anyhow!(format!("{:?}", errors)));
         }
         let mut parser = Parser::init(tokens);
         let statements = parser.parse()?;

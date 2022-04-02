@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 use crate::interpreter::InterpreterLiteral;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -57,7 +59,7 @@ impl Environment {
         environment
     }
 
-    pub fn assign(&mut self, name: &str, value: InterpreterLiteral) -> Result<(), &'static str> {
+    pub fn assign(&mut self, name: &str, value: InterpreterLiteral) -> Result<()> {
         if self.values.contains_key(name) {
             self.values.insert(name.to_string(), value);
             Ok(())
@@ -65,12 +67,12 @@ impl Environment {
             if let Some(parent) = &self.parent {
                 parent.borrow_mut().assign(name, value)
             } else {
-                Err("Undefined variable usage.")
+                Err(anyhow!("Undefined variable usage."))
             }
         }
     }
 
-    pub fn assign_at(me: &Rc<RefCell<Environment>>, distance: usize, name: &str, value: InterpreterLiteral) -> Result<(), &'static str> {
+    pub fn assign_at(me: &Rc<RefCell<Environment>>, distance: usize, name: &str, value: InterpreterLiteral) -> Result<()> {
         Environment::ancestor(me, distance).borrow_mut().assign(name, value)
     }
 

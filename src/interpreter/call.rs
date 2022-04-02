@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
 use super::environment::Environment;
@@ -7,7 +9,7 @@ use crate::{
 };
 
 pub trait Callable {
-    fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str>;
+    fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral>;
     fn name(&self) -> &str;
     fn arity(&self) -> u32;
     fn duplicate(&self) -> Box<dyn Callable>;
@@ -22,7 +24,7 @@ impl ClockPrimitive {
 }
 
 impl Callable for ClockPrimitive {
-    fn call(&self, _: &mut Interpreter, _: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str> {
+    fn call(&self, _: &mut Interpreter, _: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral> {
         Ok(InterpreterLiteral::Number(
             SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs_f64(),
         ))
@@ -60,7 +62,7 @@ impl UserFunction {
 }
 
 impl Callable for UserFunction {
-    fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral, &'static str> {
+    fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<InterpreterLiteral>) -> Result<InterpreterLiteral> {
         let environment = Rc::new(RefCell::new(Environment::init_with_parent(&self.closure)));
         for (i, arg) in self.params.iter().enumerate() {
             environment.borrow_mut().define(&arg.lexme, arguments[i].clone());
