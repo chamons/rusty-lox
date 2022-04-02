@@ -94,7 +94,7 @@ impl<'a> Compiler<'a> {
         self.write_all_sections();
 
         let wasm_bytes = self.generate_binary();
-        // std::fs::write("/Users/donblas/tmp/mine.wasm", &wasm_bytes)?;
+        std::fs::write("/Users/donblas/tmp/mine.wasm", &wasm_bytes)?;
 
         let mut validator = wasmparser::Validator::new();
         validator.validate_all(&wasm_bytes)?;
@@ -123,13 +123,17 @@ impl<'a> Compiler<'a> {
         self.module.section(&self.functions);
         // tablesec
         // memsec
+        let mut memories = MemorySection::new();
+        memories.memory(MemoryType {
+            limits: Limits { min: 1, max: None },
+        });
+        self.module.section(&memories);
         // globalsec
         // exportsec
         // startsec
         if let Some(start_id) = &self.start_id {
             self.module.section(&StartSection { function_index: *start_id });
         }
-
         // elemsec
         // datacountsec
         // codesec
@@ -258,18 +262,13 @@ impl<'a> Compiler<'a> {
 
     fn compile_call_expression(&mut self, callee: &ChildExpression, arguments: &Vec<ChildExpression>) -> Result<()> {
         let function = match &*callee.as_ref().unwrap().as_ref() {
-            Expression::Literal { value } => Ok(value),
-            _ => Err(anyhow!("Invalid call expression")),
-        }?;
-
-        let function_name = match function {
-            TokenLiteral::String(s) => Ok(s),
-            _ => Err(anyhow!("Invalid call name")),
+            Expression::Variable { name } => Ok(name),
+            e => Err(anyhow!("Invalid call expression: {:?}", e)),
         }?;
 
         let function_index = self
             .function_names
-            .get(function_name)
+            .get(&function.lexme)
             .ok_or_else(|| anyhow!("Unable to find function already defined"))?;
         self.context.instructions.push(Instruction::Call(*function_index));
 
@@ -297,6 +296,8 @@ impl<'a> Compiler<'a> {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
+    use claim::assert_ok;
+
     use crate::utils::BackEnd;
 
     use super::*;
@@ -320,5 +321,12 @@ mod tests {
     fn single_values() {
         assert_eq!(Ok("42.2".to_string()), execute("42.2"));
         assert_eq!(Ok("2".to_string()), execute("2"));
+    }
+
+    #[test]
+    fn clock() {
+        let clock = execute("clock ()");
+        assert_ok!(&clock);
+        assert!(clock.unwrap().len() > 0);
     }
 }
