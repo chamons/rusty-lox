@@ -137,7 +137,7 @@ impl Resolver {
         Ok(())
     }
 
-    fn resolve_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<ChildStatement>) -> Result<(), &'static str> {
+    fn resolve_function_declaration(&mut self, name: &Token, params: &Vec<Token>, body:     &Vec<ChildStatement>) -> Result<(), &'static str> {
         self.declare(name)?;
         self.define(name);
         self.resolve_function(params, body, FunctionType::Function)?;

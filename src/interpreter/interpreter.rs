@@ -389,7 +389,7 @@ impl Interpreter {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::Resolver;
+    use crate::{interpreter::Resolver, utils::BackEnd};
 
     use super::*;
     use claim::assert_ok;
@@ -412,10 +412,10 @@ mod tests {
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
 
-        let mut front_end = super::super::FrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
+        let mut back_end = super::super::InterpreterBackEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
-        front_end.execute_script(script)?;
+        back_end.execute_script(script)?;
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
@@ -425,10 +425,10 @@ mod tests {
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
 
-        let mut front_end = super::super::FrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
+        let mut back_end = super::super::InterpreterBackEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
-        front_end.execute_script(script)?;
+        back_end.execute_script(script)?;
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
@@ -449,8 +449,8 @@ mod tests {
     }
 
     fn execute_no_redirect(script: &str) -> Result<(), String> {
-        let mut front_end = super::super::FrontEnd::init(Box::new(|_| {}));
-        front_end.execute_script(script)
+        let mut back_end = super::super::InterpreterBackEnd::init(Box::new(|_| {}));
+        back_end.execute_script(script)
     }
 
     #[test]
