@@ -865,6 +865,7 @@ dependencies = [
  "float-cmp",
  "lazy_static",
  "wasm-encoder",
+ "wasmparser",
  "wasmtime",
 ]
 

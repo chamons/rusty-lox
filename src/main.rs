@@ -69,7 +69,7 @@ fn main() {
     let mut back_end: Box<dyn BackEnd> = if args.use_interpreter {
         Box::new(interpreter::InterpreterBackEnd::init(Box::new(|p| println!("{}", p))))
     } else {
-        Box::new(compiler::CompilerBackEnd::init())
+        Box::new(compiler::CompilerBackEnd::init(Box::new(|p| println!("{}", p))))
     };
 
     if let Some(script) = args.script {

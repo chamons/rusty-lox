@@ -1,16 +1,78 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use wasm_encoder::*;
 
 use crate::parser::{ChildExpression, ChildStatement, Expression, Statement, Token, TokenLiteral};
 
-pub struct Compiler {}
+pub struct Compiler {
+    module: Module,
+    start: Function,
+    types: TypeSection,
+    imports: ImportSection,
+    functions: FunctionSection,
+}
 
 impl Compiler {
     pub fn init() -> Self {
-        Compiler {}
+        Compiler {
+            module: Module::new(),
+            start: Function::new(vec![]),
+            types: TypeSection::new(),
+            imports: ImportSection::new(),
+            functions: FunctionSection::new(),
+        }
     }
 
-    pub fn compile(&mut self, statements: &Vec<ChildStatement>) -> Vec<u8> {
-        vec![]
+    pub fn compile(&mut self, statements: &Vec<ChildStatement>) -> Result<Vec<u8>> {
+        self.initialize_compile();
+
+        self.resolve_list_of_statements(statements)?;
+
+        self.finalize_compile()
+    }
+
+    fn initialize_compile(&mut self) {
+        self.imports.import("imports", Some("clock_func"), EntityType::Function(0));
+        self.types.function(vec![], vec![ValType::F64]);
+
+        self.imports.import("imports", Some("log_str"), EntityType::Function(1));
+        self.types.function(vec![ValType::I32, ValType::I32], vec![]);
+    }
+
+    fn finalize_compile(&mut self) -> Result<Vec<u8>> {
+        self.write_sections();
+
+        let wasm_bytes = self.generate_binary();
+        // std::fs::write("/Users/donblas/tmp/mine.wasm", &wasm_bytes)?;
+
+        let mut validator = wasmparser::Validator::new();
+        validator.validate_all(&wasm_bytes)?;
+
+        Ok(wasm_bytes.to_vec())
+    }
+
+    fn generate_binary(&mut self) -> Vec<u8> {
+        let final_module = std::mem::replace(&mut self.module, Module::new());
+        final_module.finish()
+    }
+
+    fn write_sections(&mut self) {
+        // Section Order - This ordering matters, though we don't use every section today, they are left for future use (and ordering)
+
+        // typesec
+        self.module.section(&self.types);
+        // importsec
+        self.module.section(&self.imports);
+        // funcsec
+        self.module.section(&self.functions);
+        // tablesec
+        // memsec
+        // globalsec
+        // exportsec
+        // startsec
+        // elemsec
+        // datacountsec
+        // codesec
+        // datasec
     }
 
     fn resolve_local(&mut self, expr: &ChildExpression, name: &Token) -> Result<()> {
@@ -109,5 +171,34 @@ impl Compiler {
 
     fn resolve_variable_statement(&mut self, name: &Token, initializer: &ChildExpression) -> Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
+    use crate::utils::BackEnd;
+
+    use super::*;
+
+    fn execute(script: &str) -> Result<String, String> {
+        let script = &format!("print {};", script);
+
+        let value = Rc::new(RefCell::new(None));
+        let value_interp = Rc::clone(&value);
+
+        let mut back_end = super::super::CompilerBackEnd::init(Box::new(move |p: &str| {
+            value_interp.borrow_mut().replace(p.to_string());
+        }));
+        back_end.execute_script(script).map_err(|e| e.to_string())?;
+
+        let value = value.borrow().clone().unwrap_or("".to_string());
+        Ok(value)
+    }
+
+    #[test]
+    fn single_values() {
+        assert_eq!(Ok("42.0".to_string()), execute("42"));
     }
 }
