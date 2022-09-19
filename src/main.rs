@@ -6,11 +6,13 @@
     clippy::module_inception
 )]
 
+mod bytecode;
 mod interpreter;
 mod parser;
 mod utils;
 
-use interpreter::FrontEnd;
+use bytecode::BytecodeFrontEnd;
+use interpreter::InterpreterFrontEnd;
 use utils::die;
 
 #[macro_use]
@@ -21,11 +23,15 @@ use std::{
     io::{self, Write},
 };
 
-fn run_file(path: &str) {
+trait FrontEnd {
+    fn execute_single_line(&mut self, line: &str) -> Result<(), String>;
+    fn execute_script(&mut self, script: &str) -> Result<(), String>;
+}
+
+fn run_file(target: &mut dyn FrontEnd, path: &str) {
     match fs::read_to_string(path) {
         Ok(script) => {
-            let mut interpreter = FrontEnd::init(Box::new(|p| println!("{}", p)));
-            if let Err(e) = interpreter.execute_script(&script) {
+            if let Err(e) = target.execute_script(&script) {
                 println!("Error: {e}");
             }
         }
@@ -33,16 +39,15 @@ fn run_file(path: &str) {
     }
 }
 
-fn run_prompt() {
+fn run_prompt(target: &mut dyn FrontEnd) {
     let stdin = std::io::stdin();
     let mut line = String::new();
-    let mut interpreter = FrontEnd::init(Box::new(|p| println!("{}", p)));
 
     loop {
         print!("> ");
         io::stdout().flush().expect("Stdout flush");
         stdin.read_line(&mut line).expect("Error reading console");
-        if let Err(e) = interpreter.execute_single_line(&line) {
+        if let Err(e) = target.execute_single_line(&line) {
             println!("Error: {e}");
         }
         line.clear();
@@ -51,11 +56,16 @@ fn run_prompt() {
 
 fn main() {
     let mut args = env::args();
+    let mut interpreter: Box<dyn FrontEnd> = if env::var("USE_INTERPRETER").is_ok() {
+        Box::new(InterpreterFrontEnd::init(Box::new(|p| println!("{}", p))))
+    } else {
+        Box::new(BytecodeFrontEnd::new())
+    };
 
     // First argument is our program name
     match args.len() - 1 {
-        0 => run_prompt(),
-        1 => run_file(&args.nth(1).unwrap()),
+        0 => run_prompt(interpreter.as_mut()),
+        1 => run_file(interpreter.as_mut(), &args.nth(1).unwrap()),
         _ => {
             die("Usage: rusty-lox [script]");
         }

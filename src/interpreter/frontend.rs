@@ -1,24 +1,29 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::parser::{Parser, Scanner};
+use crate::{
+    parser::{Parser, Scanner},
+    FrontEnd,
+};
 
 use super::{Interpreter, InterpreterLiteral, Resolver};
 
-pub struct FrontEnd {
+pub struct InterpreterFrontEnd {
     interpreter: Rc<RefCell<Interpreter>>,
     resolver: Resolver,
 }
 
-impl FrontEnd {
-    pub fn init(print: Box<dyn FnMut(&InterpreterLiteral)>) -> FrontEnd {
+impl InterpreterFrontEnd {
+    pub fn init(print: Box<dyn FnMut(&InterpreterLiteral)>) -> InterpreterFrontEnd {
         let interpreter = Rc::new(RefCell::new(Interpreter::init(print)));
-        FrontEnd {
+        InterpreterFrontEnd {
             resolver: Resolver::init(&interpreter),
             interpreter,
         }
     }
+}
 
-    pub fn execute_single_line(&mut self, line: &str) -> Result<(), String> {
+impl FrontEnd for InterpreterFrontEnd {
+    fn execute_single_line(&mut self, line: &str) -> Result<(), String> {
         let mut scanner = Scanner::init(line);
         let (tokens, errors) = scanner.scan_tokens();
         if errors.len() > 0 {
@@ -41,7 +46,7 @@ impl FrontEnd {
         Ok(())
     }
 
-    pub fn execute_script(&mut self, script: &str) -> Result<(), String> {
+    fn execute_script(&mut self, script: &str) -> Result<(), String> {
         let mut scanner = Scanner::init(script);
         let (tokens, errors) = scanner.scan_tokens();
         if errors.len() > 0 {

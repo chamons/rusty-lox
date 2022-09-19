@@ -9,4 +9,4 @@ mod resolver;
 pub use resolver::*;
 
 mod frontend;
-pub use frontend::FrontEnd;
+pub use frontend::InterpreterFrontEnd;

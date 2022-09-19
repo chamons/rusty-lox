@@ -412,7 +412,7 @@ mod tests {
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
 
-        let mut front_end = super::super::FrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
+        let mut front_end = super::super::InterpreterFrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
         front_end.execute_script(script)?;
@@ -425,7 +425,7 @@ mod tests {
         let value = Rc::new(RefCell::new(None));
         let value_interp = Rc::clone(&value);
 
-        let mut front_end = super::super::FrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
+        let mut front_end = super::super::InterpreterFrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
         front_end.execute_script(script)?;
@@ -449,7 +449,7 @@ mod tests {
     }
 
     fn execute_no_redirect(script: &str) -> Result<(), String> {
-        let mut front_end = super::super::FrontEnd::init(Box::new(|_| {}));
+        let mut front_end = super::super::InterpreterFrontEnd::init(Box::new(|_| {}));
         front_end.execute_script(script)
     }
 
