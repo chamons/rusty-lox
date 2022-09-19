@@ -389,7 +389,7 @@ impl Interpreter {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::Resolver;
+    use crate::{interpreter::Resolver, FrontEnd};
 
     use super::*;
     use claim::assert_ok;
