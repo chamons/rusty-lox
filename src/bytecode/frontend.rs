@@ -1,14 +1,18 @@
 use crate::FrontEnd;
 
-pub struct BytecodeFrontEnd {}
+use super::VirtualMachine;
 
-impl BytecodeFrontEnd {
+pub struct BytecodeFrontEnd<'a> {
+    vm: VirtualMachine<'a>,
+}
+
+impl<'a> BytecodeFrontEnd<'a> {
     pub fn new() -> Self {
-        BytecodeFrontEnd {}
+        BytecodeFrontEnd { vm: VirtualMachine::new() }
     }
 }
 
-impl FrontEnd for BytecodeFrontEnd {
+impl<'a> FrontEnd for BytecodeFrontEnd<'a> {
     fn execute_single_line(&mut self, _line: &str) -> Result<(), String> {
         todo!()
     }
