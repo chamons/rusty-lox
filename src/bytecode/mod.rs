@@ -9,6 +9,9 @@ pub use chunks::*;
 mod vm;
 pub use vm::*;
 
+mod compiler;
+pub use compiler::*;
+
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum OpCode {
     Return,
@@ -43,7 +46,6 @@ impl OpValue {
     fn as_double(&self) -> Option<f64> {
         match self {
             OpValue::Double(v) => Some(*v),
-            _ => None,
         }
     }
 }

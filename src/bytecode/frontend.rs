@@ -1,6 +1,6 @@
 use crate::FrontEnd;
 
-use super::VirtualMachine;
+use super::{compile, VirtualMachine};
 
 pub struct BytecodeFrontEnd {
     vm: VirtualMachine,
@@ -13,11 +13,13 @@ impl BytecodeFrontEnd {
 }
 
 impl FrontEnd for BytecodeFrontEnd {
-    fn execute_single_line(&mut self, _line: &str) -> Result<(), String> {
-        todo!()
+    fn execute_single_line(&mut self, line: &str) -> anyhow::Result<()> {
+        self.execute_script(line)
     }
 
-    fn execute_script(&mut self, _script: &str) -> Result<(), String> {
-        todo!()
+    fn execute_script(&mut self, script: &str) -> anyhow::Result<()> {
+        let chunk = compile(script)?;
+        self.vm.interpret(&chunk)?;
+        Ok(())
     }
 }

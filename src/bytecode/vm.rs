@@ -3,7 +3,7 @@ use thiserror::Error;
 use super::*;
 
 #[derive(Error, Debug)]
-enum InterpretError {
+pub enum InterpretError {
     #[error("Compile Error")]
     CompileError,
     #[error("Runtime Error")]

@@ -415,7 +415,9 @@ mod tests {
         let mut front_end = super::super::InterpreterFrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
-        front_end.execute_script(script)?;
+        if let Err(e) = front_end.execute_script(script) {
+            return Err(e.to_string());
+        }
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
@@ -428,7 +430,9 @@ mod tests {
         let mut front_end = super::super::InterpreterFrontEnd::init(Box::new(move |p: &InterpreterLiteral| {
             value_interp.borrow_mut().replace(p.clone());
         }));
-        front_end.execute_script(script)?;
+        if let Err(e) = front_end.execute_script(script) {
+            return Err(e.to_string());
+        }
 
         let value = value.borrow().clone().unwrap_or(InterpreterLiteral::Nil);
         Ok(value)
@@ -450,7 +454,11 @@ mod tests {
 
     fn execute_no_redirect(script: &str) -> Result<(), String> {
         let mut front_end = super::super::InterpreterFrontEnd::init(Box::new(|_| {}));
-        front_end.execute_script(script)
+        if let Err(e) = front_end.execute_script(script) {
+            Err(e.to_string())
+        } else {
+            Ok(())
+        }
     }
 
     #[test]

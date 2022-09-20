@@ -5,6 +5,7 @@
     clippy::nonminimal_bool,
     clippy::module_inception
 )]
+#![allow(dead_code)]
 
 mod bytecode;
 mod interpreter;
@@ -24,8 +25,8 @@ use std::{
 };
 
 trait FrontEnd {
-    fn execute_single_line(&mut self, line: &str) -> Result<(), String>;
-    fn execute_script(&mut self, script: &str) -> Result<(), String>;
+    fn execute_single_line(&mut self, line: &str) -> anyhow::Result<()>;
+    fn execute_script(&mut self, script: &str) -> anyhow::Result<()>;
 }
 
 fn run_file(target: &mut dyn FrontEnd, path: &str) {
