@@ -1,32 +1,4 @@
-use std::fmt::Debug;
-
-#[derive(Debug, PartialEq, PartialOrd)]
-pub enum OpCode {
-    Return,
-    Constant(usize),
-}
-
-impl OpCode {
-    pub fn disassemble(&self, chunk: &Chunk) -> String {
-        match self {
-            OpCode::Return => "OP_RETURN".to_string(),
-            OpCode::Constant(index) => format!("OP_CONSTANT\t{} {:?}", index, chunk.values[*index]),
-        }
-    }
-}
-
-#[derive(PartialEq, PartialOrd)]
-pub enum OpValue {
-    Double(f64),
-}
-
-impl Debug for OpValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Double(v) => write!(f, "'{}'", v),
-        }
-    }
-}
+use super::*;
 
 pub struct Chunk {
     pub code: Vec<OpCode>,

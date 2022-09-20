@@ -2,17 +2,17 @@ use crate::FrontEnd;
 
 use super::VirtualMachine;
 
-pub struct BytecodeFrontEnd<'a> {
-    vm: VirtualMachine<'a>,
+pub struct BytecodeFrontEnd {
+    vm: VirtualMachine,
 }
 
-impl<'a> BytecodeFrontEnd<'a> {
+impl BytecodeFrontEnd {
     pub fn new() -> Self {
         BytecodeFrontEnd { vm: VirtualMachine::new() }
     }
 }
 
-impl<'a> FrontEnd for BytecodeFrontEnd<'a> {
+impl FrontEnd for BytecodeFrontEnd {
     fn execute_single_line(&mut self, _line: &str) -> Result<(), String> {
         todo!()
     }
