@@ -10,3 +10,4 @@ thiserror = "1.0.35"
 
 [dev-dependencies]
 claim = "0.5.0"
+assert_approx_eq = "1.1.0"
