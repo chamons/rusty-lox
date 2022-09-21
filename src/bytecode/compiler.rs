@@ -55,23 +55,23 @@ fn unwrap_or_error<'a, T>(element: &'a Option<Box<T>>) -> Result<&'a T> {
 fn compile_statement(statement: &Statement, chunk: &mut Chunk) -> Result<()> {
     match statement {
         Statement::Expression { expression } => compile_expression(unwrap_or_error(expression)?, chunk),
-        Statement::Print { expression } => todo!(),
-        Statement::Variable { name, initializer } => todo!(),
-        Statement::Block { statements } => todo!(),
+        Statement::Print { expression: _ } => todo!(),
+        Statement::Variable { name: _, initializer: _ } => todo!(),
+        Statement::Block { statements: _ } => todo!(),
         Statement::If {
-            condition,
-            then_branch,
-            else_branch,
+            condition: _,
+            then_branch: _,
+            else_branch: _,
         } => todo!(),
-        Statement::While { condition, body } => todo!(),
-        Statement::Function { name, params, body } => todo!(),
-        Statement::Return { value } => todo!(),
+        Statement::While { condition: _, body: _ } => todo!(),
+        Statement::Function { name: _, params: _, body: _ } => todo!(),
+        Statement::Return { value: _ } => todo!(),
     }
 }
 
 fn compile_expression(expression: &Expression, chunk: &mut Chunk) -> Result<()> {
     match expression {
-        Expression::Assign { name, value, line } => todo!(),
+        Expression::Assign { name: _, value: _, line: _ } => todo!(),
         Expression::Binary { left, operator, right, line } => {
             compile_expression(unwrap_or_error(left)?, chunk)?;
             compile_expression(unwrap_or_error(right)?, chunk)?;
@@ -159,9 +159,18 @@ fn compile_expression(expression: &Expression, chunk: &mut Chunk) -> Result<()> 
                 _ => Err(anyhow::anyhow!("Invalid binary operator")),
             }
         }
-        Expression::Variable { name, line } => todo!(),
-        Expression::Logical { left, operator, right, line } => todo!(),
-        Expression::Call { callee, arguments, line } => todo!(),
+        Expression::Variable { name: _, line: _ } => todo!(),
+        Expression::Logical {
+            left: _,
+            operator: _,
+            right: _,
+            line: _,
+        } => todo!(),
+        Expression::Call {
+            callee: _,
+            arguments: _,
+            line: _,
+        } => todo!(),
     }
 }
 
