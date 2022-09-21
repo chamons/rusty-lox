@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
 mod frontend;
 pub use frontend::*;
@@ -45,11 +45,17 @@ impl OpCode {
     }
 }
 
-#[derive(PartialEq, PartialOrd, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Clone)]
 pub enum OpValue {
     Double(f64),
     Boolean(bool),
     Nil,
+    Object(ObjectType),
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub enum ObjectType {
+    String(Rc<String>),
 }
 
 impl OpValue {
@@ -73,6 +79,15 @@ impl OpValue {
             _ => None,
         }
     }
+
+    fn as_string(&self) -> Option<String> {
+        match self {
+            OpValue::Object(o) => match o {
+                ObjectType::String(v) => Some(v.to_string()),
+            },
+            _ => None,
+        }
+    }
 }
 
 impl Debug for OpValue {
@@ -80,6 +95,7 @@ impl Debug for OpValue {
         match self {
             Self::Double(v) => write!(f, "'{}'", v),
             Self::Boolean(v) => write!(f, "'{}'", v),
+            Self::Object(v) => write!(f, "'{:?}'", v),
             Self::Nil => write!(f, "nil"),
         }
     }

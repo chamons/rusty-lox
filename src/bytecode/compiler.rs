@@ -129,7 +129,11 @@ fn compile_expression(expression: &Expression, chunk: &mut Chunk) -> Result<()> 
                 chunk.write(OpCode::Constant(index), *line);
                 Ok(())
             }
-            TokenLiteral::String(_) => todo!(),
+            TokenLiteral::String(v) => {
+                let index = chunk.write_value(OpValue::Object(ObjectType::String(Rc::new(v.to_string()))));
+                chunk.write(OpCode::Constant(index), *line);
+                Ok(())
+            }
             TokenLiteral::Number(v) => {
                 let index = chunk.write_value(OpValue::Double(v.value()));
                 chunk.write(OpCode::Constant(index), *line);
@@ -196,5 +200,12 @@ mod tests {
         let chunk = compile("nil;").unwrap();
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert_eq!(OpValue::Nil, chunk.values[0]);
+    }
+
+    #[test]
+    fn string() {
+        let chunk = compile("\"asdf\";").unwrap();
+        assert_eq!(OpCode::Constant(0), chunk.code[0]);
+        assert!(matches!(&chunk.values[0], OpValue::Object(_)));
     }
 }

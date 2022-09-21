@@ -35,6 +35,10 @@ impl VirtualMachine {
         self.stack.pop()
     }
 
+    fn peek(&mut self, index: usize) -> Option<&OpValue> {
+        self.stack.get(index)
+    }
+
     fn pop_as_double(&mut self) -> Result<f64, InterpretError> {
         if let Some(v) = self.pop() {
             if let Some(v) = v.as_double() {
@@ -50,6 +54,7 @@ impl VirtualMachine {
                 OpValue::Double(_) => Err(InterpretError::RuntimeError),
                 OpValue::Boolean(v) => Ok(v == false),
                 OpValue::Nil => Ok(true),
+                OpValue::Object(_) => Ok(false),
             }
         } else {
             Err(InterpretError::RuntimeError)
@@ -59,6 +64,15 @@ impl VirtualMachine {
     fn pop_as_boolean(&mut self) -> Result<bool, InterpretError> {
         if let Some(v) = self.pop() {
             if let Some(v) = v.as_boolean() {
+                return Ok(v);
+            }
+        }
+        Err(InterpretError::RuntimeError)
+    }
+
+    fn pop_as_string(&mut self) -> Result<String, InterpretError> {
+        if let Some(v) = self.pop() {
+            if let Some(v) = v.as_string() {
                 return Ok(v);
             }
         }
@@ -82,7 +96,7 @@ impl VirtualMachine {
                     return Ok(());
                 }
                 OpCode::Constant(index) => {
-                    self.push(chunk.values[*index]);
+                    self.push(chunk.values[*index].clone());
                 }
                 OpCode::Negate => {
                     let v = self.pop_as_double()?;
@@ -93,9 +107,18 @@ impl VirtualMachine {
                     self.push(OpValue::Boolean(v));
                 }
                 OpCode::Add => {
-                    let v2 = self.pop_as_double()?;
-                    let v1 = self.pop_as_double()?;
-                    self.push(OpValue::Double(v1 + v2));
+                    if matches!(self.peek(0), Some(OpValue::Object(ObjectType::String(_))))
+                        && matches!(self.peek(1), Some(OpValue::Object(ObjectType::String(_))))
+                    {
+                        let v2 = self.pop_as_string()?;
+                        let v1 = self.pop_as_string()?;
+
+                        self.push(OpValue::Object(ObjectType::String(Rc::new(v1 + &v2))));
+                    } else {
+                        let v2 = self.pop_as_double()?;
+                        let v1 = self.pop_as_double()?;
+                        self.push(OpValue::Double(v1 + v2));
+                    }
                 }
                 OpCode::Subtract => {
                     let v2 = self.pop_as_double()?;
@@ -158,7 +181,7 @@ mod tests {
         let chunk = compile(script).unwrap();
         let mut vm = VirtualMachine::new();
         assert!(vm.interpret(&chunk).is_ok());
-        vm.stack.first().copied()
+        vm.stack.first().cloned()
     }
 
     #[test]
@@ -205,5 +228,13 @@ mod tests {
     #[test]
     fn value_smoke() {
         assert_eq!(Some(true), execute_script("!(5 - 4 > 3 * 2 == !nil);").unwrap().as_boolean());
+    }
+
+    #[test]
+    fn string() {
+        assert_eq!(Some(true), execute_script("\"asdf\" == \"asdf\";").unwrap().as_boolean());
+        assert_eq!(Some(false), execute_script("\"asdf\" == \"asd\";").unwrap().as_boolean());
+
+        assert_eq!("asdf", execute_script("\"as\" + \"df\";").unwrap().as_string().unwrap());
     }
 }
