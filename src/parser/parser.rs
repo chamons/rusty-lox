@@ -100,6 +100,7 @@ impl<'a> Parser<'a> {
     }
 
     fn for_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        let line = self.line();
         self.consume(TokenKind::LeftParen, "Expect '(' after 'for'.")?;
 
         let initializer = if self.match_token(TokenKind::Semicolon) {
@@ -122,7 +123,7 @@ impl<'a> Parser<'a> {
         if let Some(increment) = increment {
             body = create_block_statement(vec![body, create_expression_statement(Some(increment))]);
         }
-        let condition = condition.or_else(|| create_literal(TokenLiteral::Boolean(true)));
+        let condition = condition.or_else(|| create_literal(TokenLiteral::Boolean(true), line));
 
         body = create_while_statement(condition, body);
         if let Some(initializer) = initializer {
@@ -180,7 +181,7 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
             return match expr {
                 Some(v) => match *v {
-                    Expression::Variable { name } => Ok(create_assignment(name, value)),
+                    Expression::Variable { name, line } => Ok(create_assignment(name, value, line)),
                     _ => Err("Invalid assignment target."),
                 },
                 _ => Err("Invalid assignment target."),
@@ -195,8 +196,9 @@ impl<'a> Parser<'a> {
 
         while self.match_token(TokenKind::Or) {
             let operator = self.previous().clone();
+            let line = self.line();
             let right = self.and()?;
-            expr = create_logical(expr, operator, right);
+            expr = create_logical(expr, operator, right, line);
         }
 
         Ok(expr)
@@ -207,8 +209,9 @@ impl<'a> Parser<'a> {
 
         while self.match_token(TokenKind::And) {
             let operator = self.previous().clone();
+            let line = self.line();
             let right = self.equality()?;
-            expr = create_logical(expr, operator, right);
+            expr = create_logical(expr, operator, right, line);
         }
 
         Ok(expr)
@@ -219,8 +222,9 @@ impl<'a> Parser<'a> {
 
         while self.match_tokens(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
             let operator = self.previous().clone();
+            let line = self.line();
             let right = self.comparison()?;
-            expr = create_binary(expr, operator, right);
+            expr = create_binary(expr, operator, right, line);
         }
         Ok(expr)
     }
@@ -270,8 +274,9 @@ impl<'a> Parser<'a> {
         let mut expr = self.term()?;
         while self.match_tokens(&[TokenKind::Greater, TokenKind::GreaterEqual, TokenKind::Less, TokenKind::LessEqual]) {
             let operator = self.previous().clone();
+            let line = self.line();
             let right = self.term()?;
-            expr = create_binary(expr, operator, right);
+            expr = create_binary(expr, operator, right, line);
         }
         Ok(expr)
     }
@@ -280,8 +285,9 @@ impl<'a> Parser<'a> {
         let mut expr = self.factor()?;
         while self.match_tokens(&[TokenKind::Minus, TokenKind::Plus]) {
             let operator = self.previous().clone();
+            let line = self.line();
             let right = self.factor()?;
-            expr = create_binary(expr, operator, right);
+            expr = create_binary(expr, operator, right, line);
         }
         Ok(expr)
     }
@@ -291,17 +297,19 @@ impl<'a> Parser<'a> {
 
         while self.match_tokens(&[TokenKind::Slash, TokenKind::Star]) {
             let operator = self.previous().clone();
+            let line = self.line();
             let right = self.unary()?;
-            expr = create_binary(expr, operator, right);
+            expr = create_binary(expr, operator, right, line);
         }
         Ok(expr)
     }
 
     fn unary(&mut self) -> Result<ChildExpression, &'static str> {
+        let line = self.line();
         if self.match_tokens(&[TokenKind::Bang, TokenKind::Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
-            Ok(create_unary(operator, right))
+            Ok(create_unary(operator, right, line))
         } else {
             self.call()
         }
@@ -321,6 +329,7 @@ impl<'a> Parser<'a> {
 
     fn finish_call(&mut self, callee: ChildExpression) -> Result<ChildExpression, &'static str> {
         let mut arguments = vec![];
+        let line = self.line();
 
         if !self.check(TokenKind::RightParen) {
             loop {
@@ -336,29 +345,34 @@ impl<'a> Parser<'a> {
 
         self.consume(TokenKind::RightParen, "Expect ')' after arguments.")?;
 
-        Ok(create_call(callee, arguments))
+        Ok(create_call(callee, arguments, line))
     }
 
     fn primary(&mut self) -> Result<ChildExpression, &'static str> {
+        let line = self.line();
         if self.match_token(TokenKind::False) {
-            Ok(create_literal(TokenLiteral::Boolean(false)))
+            Ok(create_literal(TokenLiteral::Boolean(false), line))
         } else if self.match_token(TokenKind::True) {
-            Ok(create_literal(TokenLiteral::Boolean(true)))
+            Ok(create_literal(TokenLiteral::Boolean(true), line))
         } else if self.match_token(TokenKind::Nil) {
-            Ok(create_literal(TokenLiteral::Nil))
+            Ok(create_literal(TokenLiteral::Nil, line))
         } else if self.match_tokens(&[TokenKind::Number, TokenKind::String]) {
-            Ok(create_literal(self.previous().literal.clone()))
+            Ok(create_literal(self.previous().literal.clone(), line))
         } else {
             if self.match_token(TokenKind::Identifier) {
-                Ok(create_variable(self.previous().clone()))
+                Ok(create_variable(self.previous().clone(), line))
             } else if self.match_token(TokenKind::LeftParen) {
                 let expr = self.expression()?;
                 self.consume(TokenKind::RightParen, "Expect ')' after expression")?;
-                Ok(create_grouping(expr))
+                Ok(create_grouping(expr, line))
             } else {
                 Err("Expect expression.")
             }
         }
+    }
+
+    fn line(&self) -> u32 {
+        self.peek().line
     }
 
     fn consume(&mut self, kind: TokenKind, message: &'static str) -> Result<&Token, &'static str> {

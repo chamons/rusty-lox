@@ -2,7 +2,7 @@ use super::*;
 
 pub struct Chunk {
     pub code: Vec<OpCode>,
-    pub lines: Vec<usize>,
+    pub lines: Vec<u32>,
     pub values: Vec<OpValue>,
 }
 
@@ -15,7 +15,7 @@ impl Chunk {
         }
     }
 
-    pub fn write(&mut self, code: OpCode, line: usize) {
+    pub fn write(&mut self, code: OpCode, line: u32) {
         self.code.push(code);
         self.lines.push(line);
     }

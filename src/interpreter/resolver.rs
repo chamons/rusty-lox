@@ -147,11 +147,11 @@ impl Resolver {
     fn resolve_expression(&mut self, node: &ChildExpression) -> Result<(), &'static str> {
         if let Some(n) = node {
             match &**n {
-                Expression::Variable { name } => self.resolve_variable_expression(name, node),
-                Expression::Assign { name, value } => self.resolve_assign_expression(name, value, node),
+                Expression::Variable { name, .. } => self.resolve_variable_expression(name, node),
+                Expression::Assign { name, value, .. } => self.resolve_assign_expression(name, value, node),
                 Expression::Binary { left, right, .. } => self.resolve_binary(left, right),
-                Expression::Call { callee, arguments } => self.resolve_call_expression(callee, arguments),
-                Expression::Grouping { expression } => self.resolve_expression(expression),
+                Expression::Call { callee, arguments, .. } => self.resolve_call_expression(callee, arguments),
+                Expression::Grouping { expression, .. } => self.resolve_expression(expression),
                 Expression::Literal { .. } => Ok(()),
                 Expression::Logical { left, right, .. } => self.resolve_logical(left, right),
                 Expression::Unary { right, .. } => self.resolve_expression(right),

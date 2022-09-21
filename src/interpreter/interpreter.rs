@@ -338,14 +338,14 @@ impl Interpreter {
     pub fn execute_expression(&mut self, expr: &ChildExpression) -> Result<InterpreterLiteral, &'static str> {
         if let Some(node) = expr {
             match &**node {
-                Expression::Binary { left, operator, right } => self.execute_binary(left, operator, right),
-                Expression::Grouping { expression } => self.execute_grouping(expression),
-                Expression::Literal { value } => self.execute_literal(value),
-                Expression::Unary { operator, right } => self.execute_unary(operator, right),
-                Expression::Variable { name } => self.lookup_variables(name, expr),
-                Expression::Assign { name, value } => self.execute_assign_expression(name, value, expr),
-                Expression::Logical { left, operator, right } => self.execute_logical_expression(left, operator, right),
-                Expression::Call { callee, arguments } => self.execute_call_expression(callee, arguments),
+                Expression::Binary { left, operator, right, .. } => self.execute_binary(left, operator, right),
+                Expression::Grouping { expression, .. } => self.execute_grouping(expression),
+                Expression::Literal { value, .. } => self.execute_literal(value),
+                Expression::Unary { operator, right, .. } => self.execute_unary(operator, right),
+                Expression::Variable { name, .. } => self.lookup_variables(name, expr),
+                Expression::Assign { name, value, .. } => self.execute_assign_expression(name, value, expr),
+                Expression::Logical { left, operator, right, .. } => self.execute_logical_expression(left, operator, right),
+                Expression::Call { callee, arguments, .. } => self.execute_call_expression(callee, arguments),
             }
         } else {
             Ok(InterpreterLiteral::Nil)
