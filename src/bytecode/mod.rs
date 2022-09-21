@@ -17,10 +17,14 @@ pub enum OpCode {
     Return,
     Constant(usize),
     Negate,
+    Not,
     Add,
     Subtract,
     Multiply,
     Divide,
+    Equal,
+    Greater,
+    Less,
 }
 
 impl OpCode {
@@ -33,6 +37,10 @@ impl OpCode {
             OpCode::Subtract => "OP_SUBTRACT".to_string(),
             OpCode::Multiply => "OP_MULTIPLY".to_string(),
             OpCode::Divide => "OP_DIVIDE".to_string(),
+            OpCode::Not => "OP_NOT".to_string(),
+            OpCode::Equal => "OP_EQUAL".to_string(),
+            OpCode::Greater => "OP_GREATER".to_string(),
+            OpCode::Less => "OP_LESS".to_string(),
         }
     }
 }
@@ -40,12 +48,29 @@ impl OpCode {
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
 pub enum OpValue {
     Double(f64),
+    Boolean(bool),
+    Nil,
 }
 
 impl OpValue {
     fn as_double(&self) -> Option<f64> {
         match self {
             OpValue::Double(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    fn as_boolean(&self) -> Option<bool> {
+        match self {
+            OpValue::Boolean(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    fn as_nil(&self) -> Option<()> {
+        match self {
+            OpValue::Nil => Some(()),
+            _ => None,
         }
     }
 }
@@ -54,6 +79,8 @@ impl Debug for OpValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Double(v) => write!(f, "'{}'", v),
+            Self::Boolean(v) => write!(f, "'{}'", v),
+            Self::Nil => write!(f, "nil"),
         }
     }
 }

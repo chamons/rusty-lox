@@ -92,25 +92,54 @@ fn compile_expression(expression: &Expression, chunk: &mut Chunk) -> Result<()> 
                     chunk.write(OpCode::Multiply, *line);
                     Ok(())
                 }
-                TokenKind::Greater => todo!(),
-                TokenKind::GreaterEqual => todo!(),
-                TokenKind::Less => todo!(),
-                TokenKind::LessEqual => todo!(),
-                TokenKind::EqualEqual => todo!(),
-                TokenKind::BangEqual => todo!(),
+                TokenKind::Greater => {
+                    chunk.write(OpCode::Greater, *line);
+                    Ok(())
+                }
+                TokenKind::GreaterEqual => {
+                    chunk.write(OpCode::Less, *line);
+                    chunk.write(OpCode::Not, *line);
+                    Ok(())
+                }
+                TokenKind::Less => {
+                    chunk.write(OpCode::Less, *line);
+                    Ok(())
+                }
+                TokenKind::LessEqual => {
+                    chunk.write(OpCode::Greater, *line);
+                    chunk.write(OpCode::Not, *line);
+                    Ok(())
+                }
+                TokenKind::EqualEqual => {
+                    chunk.write(OpCode::Equal, *line);
+                    Ok(())
+                }
+                TokenKind::BangEqual => {
+                    chunk.write(OpCode::Equal, *line);
+                    chunk.write(OpCode::Not, *line);
+                    Ok(())
+                }
                 _ => Err(anyhow::anyhow!("Invalid binary operator")),
             }
         }
         Expression::Grouping { expression, line: _ } => compile_expression(unwrap_or_error(expression)?, chunk),
         Expression::Literal { value, line } => match value {
-            TokenLiteral::Nil => todo!(),
+            TokenLiteral::Nil => {
+                let index = chunk.write_value(OpValue::Nil);
+                chunk.write(OpCode::Constant(index), *line);
+                Ok(())
+            }
             TokenLiteral::String(_) => todo!(),
             TokenLiteral::Number(v) => {
                 let index = chunk.write_value(OpValue::Double(v.value()));
                 chunk.write(OpCode::Constant(index), *line);
                 Ok(())
             }
-            TokenLiteral::Boolean(_) => todo!(),
+            TokenLiteral::Boolean(v) => {
+                let index = chunk.write_value(OpValue::Boolean(*v));
+                chunk.write(OpCode::Constant(index), *line);
+                Ok(())
+            }
         },
         Expression::Unary { operator, right, line } => {
             compile_expression(unwrap_or_error(right)?, chunk)?;
@@ -119,7 +148,10 @@ fn compile_expression(expression: &Expression, chunk: &mut Chunk) -> Result<()> 
                     chunk.write(OpCode::Negate, *line);
                     Ok(())
                 }
-                TokenKind::Bang => todo!(),
+                TokenKind::Bang => {
+                    chunk.write(OpCode::Not, *line);
+                    Ok(())
+                }
                 _ => Err(anyhow::anyhow!("Invalid binary operator")),
             }
         }
@@ -148,5 +180,21 @@ mod tests {
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert_eq!(OpCode::Negate, chunk.code[1]);
         assert_eq!(OpCode::Return, chunk.code[2]);
+    }
+
+    #[test]
+    fn booleans() {
+        let chunk = compile("false + true;").unwrap();
+        assert_eq!(OpCode::Constant(0), chunk.code[0]);
+        assert_eq!(OpCode::Constant(1), chunk.code[1]);
+        assert_eq!(OpCode::Add, chunk.code[2]);
+        assert_eq!(OpCode::Return, chunk.code[3]);
+    }
+
+    #[test]
+    fn nil() {
+        let chunk = compile("nil;").unwrap();
+        assert_eq!(OpCode::Constant(0), chunk.code[0]);
+        assert_eq!(OpValue::Nil, chunk.values[0]);
     }
 }
