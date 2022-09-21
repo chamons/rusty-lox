@@ -39,12 +39,12 @@ pub fn compile(script: &str) -> Result<Chunk, CompilerError> {
 
 fn compile_statements(statements: &[&Statement], chunk: &mut Chunk) -> Result<()> {
     for statement in statements {
-        compile_statement(&statement, chunk)?;
+        compile_statement(statement, chunk)?;
     }
     Ok(())
 }
 
-fn unwrap_or_error<'a, T>(element: &'a Option<Box<T>>) -> Result<&'a T> {
+fn unwrap_or_error<T>(element: &Option<Box<T>>) -> Result<&T> {
     if let Some(element) = element {
         Ok(element.as_ref())
     } else {

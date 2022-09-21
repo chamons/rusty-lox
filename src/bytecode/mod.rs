@@ -12,7 +12,7 @@ pub use vm::*;
 mod compiler;
 pub use compiler::*;
 
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum OpCode {
     Return,
     Constant(usize),
@@ -53,7 +53,7 @@ pub enum OpValue {
     Object(ObjectType),
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
 pub enum ObjectType {
     String(Rc<String>),
 }

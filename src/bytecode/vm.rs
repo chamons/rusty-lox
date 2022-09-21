@@ -52,7 +52,7 @@ impl VirtualMachine {
         if let Some(v) = self.pop() {
             match v {
                 OpValue::Double(_) => Err(InterpretError::RuntimeError),
-                OpValue::Boolean(v) => Ok(v == false),
+                OpValue::Boolean(v) => Ok(!v),
                 OpValue::Nil => Ok(true),
                 OpValue::Object(_) => Ok(false),
             }
@@ -89,7 +89,7 @@ impl VirtualMachine {
                     print!("[ {:?} ]", s);
                 }
                 println!();
-                println!("{}", instruction.disassemble(&chunk));
+                println!("{}", instruction.disassemble(chunk));
             }
             match instruction {
                 OpCode::Return => {

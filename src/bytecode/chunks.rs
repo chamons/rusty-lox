@@ -28,7 +28,7 @@ impl Chunk {
     pub fn disassemble(&self, name: &str) {
         println!("== {name} ==");
         for (i, op) in self.code.iter().enumerate() {
-            let instruction = op.disassemble(&self);
+            let instruction = op.disassemble(self);
             let line = if i > 0 && self.lines[i] == self.lines[i - 1] {
                 "   | ".to_string()
             } else {
