@@ -272,4 +272,9 @@ mod tests {
 
         assert_eq!(1, strings.count());
     }
+
+    #[test]
+    fn wrong_assignment() {
+        assert!(compile("a * b = c + d;").is_err());
+    }
 }
