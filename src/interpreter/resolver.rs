@@ -94,7 +94,7 @@ impl Resolver {
                 Statement::Block { statements } => self.resolve_statements(statements),
                 Statement::Variable { name, initializer } => self.resolve_variable_statement(name, initializer),
                 Statement::Function { body, name, params } => self.resolve_function_declaration(name, params, body),
-                Statement::Expression { expression } => self.resolve_expression(expression),
+                Statement::Expression { expression, line: _ } => self.resolve_expression(expression),
                 Statement::If {
                     condition,
                     then_branch,

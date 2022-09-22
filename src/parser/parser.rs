@@ -121,7 +121,7 @@ impl<'a> Parser<'a> {
 
         // Sprinkle some sugar on it...
         if let Some(increment) = increment {
-            body = create_block_statement(vec![body, create_expression_statement(Some(increment))]);
+            body = create_block_statement(vec![body, create_expression_statement(Some(increment), line)]);
         }
         let condition = condition.or_else(|| create_literal(TokenLiteral::Boolean(true), line));
 
@@ -166,9 +166,10 @@ impl<'a> Parser<'a> {
     }
 
     fn expression_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        let line = self.line();
         let value = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after expression.")?;
-        Ok(create_expression_statement(value))
+        Ok(create_expression_statement(value, line))
     }
 
     fn expression(&mut self) -> Result<ChildExpression, &'static str> {

@@ -180,6 +180,9 @@ impl VirtualMachine {
                             print(&format!("{}", v.print(&self.strings)));
                         }
                     }
+                    OpCode::Pop => {
+                        self.pop();
+                    }
                 }
                 ip += 1;
             } else {
@@ -195,7 +198,6 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use super::*;
-    use assert_approx_eq::assert_approx_eq;
 
     #[test]
     fn vm_smoke_test() {
@@ -213,14 +215,11 @@ mod tests {
         assert!(vm.interpret(&chunk).is_err());
     }
 
-    fn execute_script_with_stack(script: &str) -> Option<OpValue> {
-        let (chunk, strings) = compile(script).unwrap();
-        let mut vm = VirtualMachine::new().with_strings(strings);
-        assert!(vm.interpret(&chunk).is_ok());
-        vm.stack.first().cloned()
+    fn execute_script(script: &str) -> String {
+        execute_script_multiple_lines(script)[0].clone()
     }
 
-    fn execute_script_with_prints(script: &str) -> Vec<String> {
+    fn execute_script_multiple_lines(script: &str) -> Vec<String> {
         let (chunk, strings) = compile(script).unwrap();
         let prints = Rc::new(RefCell::new(vec![]));
         let print_ref = prints.clone();
@@ -234,7 +233,7 @@ mod tests {
 
     #[test]
     fn negate() {
-        assert_approx_eq!(-1.2, execute_script_with_stack("-1.2;").unwrap().as_double().unwrap());
+        assert_eq!("-1.2", execute_script("print -1.2;"));
     }
 
     #[test]
@@ -244,8 +243,8 @@ mod tests {
 
     #[test]
     fn math_operations() {
-        for (op, expected) in &[("+", 3.0), ("-", -1.0), ("*", 2.0), ("/", 0.5)] {
-            assert_approx_eq!(expected, execute_script_with_stack(&format!("1 {op} 2;")).unwrap().as_double().unwrap());
+        for (op, expected) in &[("+", "3"), ("-", "-1"), ("*", "2"), ("/", "0.5")] {
+            assert_eq!(expected, &execute_script(&format!("print 1 {op} 2;")));
         }
     }
 
@@ -261,38 +260,34 @@ mod tests {
 
     #[test]
     fn not_boolean() {
-        assert_eq!(Some(false), execute_script_with_stack("!true;").unwrap().as_boolean());
+        assert_eq!("false", execute_script("print !true;"));
     }
 
     #[test]
     fn equality() {
-        assert_eq!(Some(true), execute_script_with_stack("4 > 3;").unwrap().as_boolean());
-        assert_eq!(Some(true), execute_script_with_stack("4 >= 3;").unwrap().as_boolean());
-        assert_eq!(Some(false), execute_script_with_stack("4 < 3;").unwrap().as_boolean());
-        assert_eq!(Some(false), execute_script_with_stack("4 <= 3;").unwrap().as_boolean());
-        assert_eq!(Some(false), execute_script_with_stack("4 == 3;").unwrap().as_boolean());
+        assert_eq!("true", execute_script("print 4 > 3;"));
+        assert_eq!("true", execute_script("print 4 >= 3;"));
+        assert_eq!("false", execute_script("print 4 < 3;"));
+        assert_eq!("false", execute_script("print 4 <= 3;"));
+        assert_eq!("false", execute_script("print 4 == 3;"));
     }
 
     #[test]
     fn value_smoke() {
-        assert_eq!(Some(true), execute_script_with_stack("!(5 - 4 > 3 * 2 == !nil);").unwrap().as_boolean());
+        assert_eq!("true", execute_script("print !(5 - 4 > 3 * 2 == !nil);"));
     }
 
     #[test]
     fn string() {
-        assert_eq!(Some(true), execute_script_with_stack("\"asdf\" == \"asdf\";").unwrap().as_boolean());
-        assert_eq!(Some(false), execute_script_with_stack("\"asdf\" == \"asd\";").unwrap().as_boolean());
-        assert_eq!(Some(true), execute_script_with_stack("\"asdf\" == (\"as\" + \"df\");").unwrap().as_boolean());
-
-        let (chunk, strings) = compile("\"as\" + \"df\";").unwrap();
-        let mut vm = VirtualMachine::new().with_strings(strings);
-        assert!(vm.interpret(&chunk).is_ok());
-        assert_eq!(vm.strings.intern("asdf"), vm.stack.first().cloned().unwrap().as_string().unwrap());
+        assert_eq!("true", execute_script("print \"asdf\" == \"asdf\";"));
+        assert_eq!("false", execute_script("print \"asdf\" == \"asd\";"));
+        assert_eq!("true", execute_script("print \"asdf\" == (\"as\" + \"df\");"));
+        assert_eq!("asdf", execute_script("print \"as\" + \"df\";"));
     }
 
     #[test]
     fn print() {
-        let prints = execute_script_with_prints("print \"asdf\";");
+        let prints = execute_script_multiple_lines("print \"asdf\";");
         assert_eq!(1, prints.len());
         assert_eq!("asdf", prints[0]);
     }

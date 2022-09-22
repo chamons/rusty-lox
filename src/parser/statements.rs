@@ -6,6 +6,7 @@ pub type ChildStatement = Option<Box<Statement>>;
 pub enum Statement {
     Expression {
         expression: ChildExpression,
+        line: u32,
     },
     Print {
         expression: ChildExpression,
@@ -37,8 +38,8 @@ pub enum Statement {
     },
 }
 
-pub fn create_expression_statement(expression: ChildExpression) -> ChildStatement {
-    Some(Box::new(Statement::Expression { expression }))
+pub fn create_expression_statement(expression: ChildExpression, line: u32) -> ChildStatement {
+    Some(Box::new(Statement::Expression { expression, line }))
 }
 
 pub fn create_print_statement(expression: ChildExpression, line: u32) -> ChildStatement {

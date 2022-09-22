@@ -73,7 +73,11 @@ impl Compiler {
 
     fn compile_statement(&mut self, statement: &Statement) -> Result<()> {
         match statement {
-            Statement::Expression { expression } => self.compile_expression(unwrap_or_error(expression)?),
+            Statement::Expression { expression, line } => {
+                self.compile_expression(unwrap_or_error(expression)?)?;
+                self.chunk.write(OpCode::Pop, *line);
+                Ok(())
+            }
             Statement::Print { expression, line } => {
                 self.compile_expression(unwrap_or_error(expression)?)?;
                 self.chunk.write(OpCode::Print, *line);

@@ -29,6 +29,7 @@ pub enum OpCode {
     Greater,
     Less,
     Print,
+    Pop,
 }
 
 impl OpCode {
@@ -48,6 +49,7 @@ impl OpCode {
             OpCode::Greater => "OP_GREATER".to_string(),
             OpCode::Less => "OP_LESS".to_string(),
             OpCode::Print => "OP_PRINT".to_string(),
+            OpCode::Pop => "OP_POP".to_string(),
         }
     }
 }
