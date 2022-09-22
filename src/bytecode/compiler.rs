@@ -58,7 +58,6 @@ impl Compiler {
 
         self.compile_statements(&filtered_statements)
             .map_err(|e| CompilerError::ParseError(e.to_string()))?;
-        self.chunk.write(OpCode::Return, 99);
         if cfg!(debug_assertions) {
             self.chunk.disassemble("code", &self.strings);
         }
@@ -209,7 +208,6 @@ mod tests {
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert_eq!(OpCode::Constant(1), chunk.code[1]);
         assert_eq!(OpCode::Add, chunk.code[2]);
-        assert_eq!(OpCode::Return, chunk.code[3]);
     }
 
     #[test]
@@ -217,7 +215,6 @@ mod tests {
         let (chunk, _) = compile("-(1);").unwrap();
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert_eq!(OpCode::Negate, chunk.code[1]);
-        assert_eq!(OpCode::Return, chunk.code[2]);
     }
 
     #[test]
@@ -226,7 +223,6 @@ mod tests {
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert_eq!(OpCode::Constant(1), chunk.code[1]);
         assert_eq!(OpCode::Add, chunk.code[2]);
-        assert_eq!(OpCode::Return, chunk.code[3]);
     }
 
     #[test]
@@ -248,7 +244,6 @@ mod tests {
         let (chunk, strings) = compile("print \"asdf\";").unwrap();
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert_eq!(OpCode::Print, chunk.code[1]);
-        assert_eq!(OpCode::Return, chunk.code[2]);
 
         assert_eq!(1, strings.count());
     }

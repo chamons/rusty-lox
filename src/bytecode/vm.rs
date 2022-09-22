@@ -105,83 +105,87 @@ impl VirtualMachine {
     pub fn run(&mut self, chunk: &Chunk) -> Result<(), InterpretError> {
         let mut ip: usize = 0;
         loop {
-            let instruction = &chunk.code[ip];
-            if cfg!(debug_assertions) {
-                print!("        ");
-                for s in &self.stack {
-                    print!("[ {:?} ]", s);
+            if let Some(instruction) = chunk.code.get(ip) {
+                if cfg!(debug_assertions) {
+                    print!("        ");
+                    for s in &self.stack {
+                        print!("[ {:?} ]", s);
+                    }
+                    println!();
+                    println!("{}", instruction.disassemble(chunk, &self.strings));
                 }
-                println!();
-                println!("{}", instruction.disassemble(chunk, &self.strings));
-            }
-            match instruction {
-                OpCode::Return => {
-                    return Ok(());
-                }
-                OpCode::Constant(index) => {
-                    self.push(chunk.values[*index].clone());
-                }
-                OpCode::Negate => {
-                    let v = self.pop_as_double()?;
-                    self.push(OpValue::Double(v * -1.0));
-                }
-                OpCode::Not => {
-                    let v = self.pop_as_falsey()?;
-                    self.push(OpValue::Boolean(v));
-                }
-                OpCode::Add => {
-                    if matches!(self.peek(0), Some(OpValue::Object(ObjectType::String(_))))
-                        && matches!(self.peek(1), Some(OpValue::Object(ObjectType::String(_))))
-                    {
-                        let v2 = self.pop_as_string()?.to_string();
-                        let v1 = self.pop_as_string()?;
-                        let combined = &format!("{v1}{v2}");
-                        let combined = self.strings.intern(combined);
-                        self.push(OpValue::Object(ObjectType::String(combined)));
-                    } else {
+                match instruction {
+                    OpCode::Return => {
+                        return Ok(());
+                    }
+                    OpCode::Constant(index) => {
+                        self.push(chunk.values[*index].clone());
+                    }
+                    OpCode::Negate => {
+                        let v = self.pop_as_double()?;
+                        self.push(OpValue::Double(v * -1.0));
+                    }
+                    OpCode::Not => {
+                        let v = self.pop_as_falsey()?;
+                        self.push(OpValue::Boolean(v));
+                    }
+                    OpCode::Add => {
+                        if matches!(self.peek(0), Some(OpValue::Object(ObjectType::String(_))))
+                            && matches!(self.peek(1), Some(OpValue::Object(ObjectType::String(_))))
+                        {
+                            let v2 = self.pop_as_string()?.to_string();
+                            let v1 = self.pop_as_string()?;
+                            let combined = &format!("{v1}{v2}");
+                            let combined = self.strings.intern(combined);
+                            self.push(OpValue::Object(ObjectType::String(combined)));
+                        } else {
+                            let v2 = self.pop_as_double()?;
+                            let v1 = self.pop_as_double()?;
+                            self.push(OpValue::Double(v1 + v2));
+                        }
+                    }
+                    OpCode::Subtract => {
                         let v2 = self.pop_as_double()?;
                         let v1 = self.pop_as_double()?;
-                        self.push(OpValue::Double(v1 + v2));
+                        self.push(OpValue::Double(v1 - v2));
+                    }
+                    OpCode::Multiply => {
+                        let v2 = self.pop_as_double()?;
+                        let v1 = self.pop_as_double()?;
+                        self.push(OpValue::Double(v1 * v2));
+                    }
+                    OpCode::Divide => {
+                        let v2 = self.pop_as_double()?;
+                        let v1 = self.pop_as_double()?;
+                        self.push(OpValue::Double(v1 / v2));
+                    }
+                    OpCode::Equal => {
+                        let v2 = self.pop();
+                        let v1 = self.pop();
+                        self.push(OpValue::Boolean(v1 == v2));
+                    }
+                    OpCode::Greater => {
+                        let v2 = self.pop_as_double()?;
+                        let v1 = self.pop_as_double()?;
+                        self.push(OpValue::Boolean(v1 > v2));
+                    }
+                    OpCode::Less => {
+                        let v2 = self.pop_as_double()?;
+                        let v1 = self.pop_as_double()?;
+                        self.push(OpValue::Boolean(v1 < v2));
+                    }
+                    OpCode::Print => {
+                        let v = self.pop_as_anything()?;
+                        if let Some(print) = &mut self.print {
+                            print(&format!("{}", v.print(&self.strings)));
+                        }
                     }
                 }
-                OpCode::Subtract => {
-                    let v2 = self.pop_as_double()?;
-                    let v1 = self.pop_as_double()?;
-                    self.push(OpValue::Double(v1 - v2));
-                }
-                OpCode::Multiply => {
-                    let v2 = self.pop_as_double()?;
-                    let v1 = self.pop_as_double()?;
-                    self.push(OpValue::Double(v1 * v2));
-                }
-                OpCode::Divide => {
-                    let v2 = self.pop_as_double()?;
-                    let v1 = self.pop_as_double()?;
-                    self.push(OpValue::Double(v1 / v2));
-                }
-                OpCode::Equal => {
-                    let v2 = self.pop();
-                    let v1 = self.pop();
-                    self.push(OpValue::Boolean(v1 == v2));
-                }
-                OpCode::Greater => {
-                    let v2 = self.pop_as_double()?;
-                    let v1 = self.pop_as_double()?;
-                    self.push(OpValue::Boolean(v1 > v2));
-                }
-                OpCode::Less => {
-                    let v2 = self.pop_as_double()?;
-                    let v1 = self.pop_as_double()?;
-                    self.push(OpValue::Boolean(v1 < v2));
-                }
-                OpCode::Print => {
-                    let v = self.pop_as_anything()?;
-                    if let Some(print) = &mut self.print {
-                        print(&format!("{}", v.print(&self.strings)));
-                    }
-                }
+                ip += 1;
+            } else {
+                // We are out of instructions to execute
+                return Ok(());
             }
-            ip += 1;
         }
     }
 }
