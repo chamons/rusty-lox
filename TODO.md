@@ -1,1 +1,2 @@
+- Fix up interpret mode of bytecode to save state between expressions
 - Update Parser to use anyhow and not return static strings

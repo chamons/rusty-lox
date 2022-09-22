@@ -92,7 +92,7 @@ impl Resolver {
         if let Some(node) = node {
             match &**node {
                 Statement::Block { statements } => self.resolve_statements(statements),
-                Statement::Variable { name, initializer } => self.resolve_variable_statement(name, initializer),
+                Statement::Variable { name, initializer, line: _ } => self.resolve_variable_statement(name, initializer),
                 Statement::Function { body, name, params } => self.resolve_function_declaration(name, params, body),
                 Statement::Expression { expression, line: _ } => self.resolve_expression(expression),
                 Statement::If {

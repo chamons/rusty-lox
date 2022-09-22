@@ -33,6 +33,9 @@ pub enum OpCode {
     True,
     False,
     Nil,
+    DefineGlobal(usize),
+    GetGlobal(usize),
+    SetGlobal(usize),
 }
 
 impl OpCode {
@@ -56,6 +59,15 @@ impl OpCode {
             OpCode::True => "OP_TRUE".to_string(),
             OpCode::False => "OP_FALSE".to_string(),
             OpCode::Nil => "OP_NIL".to_string(),
+            OpCode::DefineGlobal(index) => {
+                format!("OP_DEFINE_GLOBAL\t{} {}", index, chunk.values[*index].print(strings))
+            }
+            OpCode::GetGlobal(index) => {
+                format!("OP_GET_GLOBAL\t{} {}", index, chunk.values[*index].print(strings))
+            }
+            OpCode::SetGlobal(index) => {
+                format!("OP_SET_GLOBAL\t{} {}", index, chunk.values[*index].print(strings))
+            }
         }
     }
 }

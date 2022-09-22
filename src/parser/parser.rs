@@ -64,12 +64,14 @@ impl<'a> Parser<'a> {
     }
 
     fn variable_declaration(&mut self) -> Result<ChildStatement, &'static str> {
+        let line = self.line();
+
         let name = self.consume(TokenKind::Identifier, "Expect variable name.")?.clone();
 
         let initializer = if self.match_token(TokenKind::Equal) { self.expression()? } else { None };
         self.consume(TokenKind::Semicolon, "Expect ';' after variable declaration.")?;
 
-        Ok(create_variable_statement(name, initializer))
+        Ok(create_variable_statement(name, initializer, line))
     }
 
     fn statement(&mut self) -> Result<ChildStatement, &'static str> {

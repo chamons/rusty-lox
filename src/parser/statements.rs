@@ -15,6 +15,7 @@ pub enum Statement {
     Variable {
         name: Token,
         initializer: ChildExpression,
+        line: u32,
     },
     Block {
         statements: Vec<ChildStatement>,
@@ -46,8 +47,8 @@ pub fn create_print_statement(expression: ChildExpression, line: u32) -> ChildSt
     Some(Box::new(Statement::Print { expression, line }))
 }
 
-pub fn create_variable_statement(name: Token, initializer: ChildExpression) -> ChildStatement {
-    Some(Box::new(Statement::Variable { name, initializer }))
+pub fn create_variable_statement(name: Token, initializer: ChildExpression, line: u32) -> ChildStatement {
+    Some(Box::new(Statement::Variable { name, initializer, line }))
 }
 
 pub fn create_block_statement(statements: Vec<ChildStatement>) -> ChildStatement {

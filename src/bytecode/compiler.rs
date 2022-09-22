@@ -83,11 +83,16 @@ impl Compiler {
                 self.chunk.write(OpCode::Print, *line);
                 Ok(())
             }
-            Statement::Variable { name, initializer } => {
+            Statement::Variable { name, initializer, line } => {
                 if let Some(initializer) = initializer {
                     self.compile_expression(initializer)?;
                 } else {
+                    self.chunk.write(OpCode::Nil, *line);
                 }
+
+                let index = self.chunk.write_value(OpValue::Object(ObjectType::String(self.strings.intern(&name.lexme))));
+                self.chunk.write(OpCode::DefineGlobal(index), *line);
+
                 Ok(())
             }
             Statement::Block { statements: _ } => todo!(),
@@ -104,7 +109,12 @@ impl Compiler {
 
     fn compile_expression(&mut self, expression: &Expression) -> Result<()> {
         match expression {
-            Expression::Assign { name: _, value: _, line: _ } => todo!(),
+            Expression::Assign { name, value, line } => {
+                self.compile_expression(unwrap_or_error(value)?)?;
+                let index = self.chunk.write_value(OpValue::Object(ObjectType::String(self.strings.intern(&name.lexme))));
+                self.chunk.write(OpCode::SetGlobal(index), *line);
+                Ok(())
+            }
             Expression::Binary { left, operator, right, line } => {
                 self.compile_expression(unwrap_or_error(left)?)?;
                 self.compile_expression(unwrap_or_error(right)?)?;
@@ -194,7 +204,11 @@ impl Compiler {
                     _ => Err(anyhow::anyhow!("Invalid binary operator")),
                 }
             }
-            Expression::Variable { name: _, line: _ } => todo!(),
+            Expression::Variable { name, line } => {
+                let index = self.chunk.write_value(OpValue::Object(ObjectType::String(self.strings.intern(&name.lexme))));
+                self.chunk.write(OpCode::GetGlobal(index), *line);
+                Ok(())
+            }
             Expression::Logical {
                 left: _,
                 operator: _,

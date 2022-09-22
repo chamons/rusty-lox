@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use thiserror::Error;
 
 use super::*;
@@ -14,6 +16,7 @@ pub struct VirtualMachine {
     stack: Vec<OpValue>,
     strings: Interner,
     print: Option<Box<dyn FnMut(&str)>>,
+    globals: HashMap<String, OpValue>,
 }
 
 impl VirtualMachine {
@@ -22,6 +25,7 @@ impl VirtualMachine {
             stack: vec![],
             strings: Interner::new(),
             print: None,
+            globals: HashMap::new(),
         }
     }
 
@@ -107,11 +111,11 @@ impl VirtualMachine {
         loop {
             if let Some(instruction) = chunk.code.get(ip) {
                 if cfg!(debug_assertions) {
-                    print!("        ");
+                    print!("        [");
                     for s in &self.stack {
-                        print!("[ {:?} ]", s);
+                        print!(" '{}' ", s.print(&self.strings));
                     }
-                    println!();
+                    println!("]");
                     println!("{}", instruction.disassemble(chunk, &self.strings));
                 }
                 match instruction {
@@ -186,6 +190,39 @@ impl VirtualMachine {
                     OpCode::True => self.push(OpValue::Boolean(true)),
                     OpCode::False => self.push(OpValue::Boolean(false)),
                     OpCode::Nil => self.push(OpValue::Nil),
+                    OpCode::DefineGlobal(index) => {
+                        if let Some(name) = chunk.values[*index].as_string() {
+                            let name = self.strings.lookup(name).to_string();
+                            let value = self.pop_as_anything()?;
+                            self.globals.insert(name, value);
+                        } else {
+                            return Err(InterpretError::RuntimeError);
+                        }
+                    }
+                    OpCode::GetGlobal(index) => {
+                        if let Some(global_name) = chunk.values[*index].as_string() {
+                            let global_name = self.strings.lookup(global_name);
+                            if let Some(global_value) = self.globals.get(global_name) {
+                                self.push(global_value.clone());
+                            } else {
+                                return Err(InterpretError::RuntimeError);
+                            }
+                        } else {
+                            return Err(InterpretError::RuntimeError);
+                        }
+                    }
+                    OpCode::SetGlobal(index) => {
+                        if let Some(name) = chunk.values[*index].as_string() {
+                            let name = self.strings.lookup(name).to_string();
+                            if !self.globals.contains_key(&name) {
+                                return Err(InterpretError::RuntimeError);
+                            }
+                            let value = self.pop_as_anything()?;
+                            self.globals.insert(name, value);
+                        } else {
+                            return Err(InterpretError::RuntimeError);
+                        }
+                    }
                 }
                 ip += 1;
             } else {
@@ -303,4 +340,36 @@ mod tests {
         let mut vm = VirtualMachine::new();
         assert!(vm.interpret(&chunk).is_err());
     }
+
+    #[test]
+    fn variable_lookup() {
+        let script = r#"
+var beverage = "cafe au lait";
+var breakfast = "beignets with " + beverage;
+print breakfast;"#;
+        assert_eq!("beignets with cafe au lait", execute_script(script));
+    }
+
+    #[test]
+    fn variable_assign() {
+        let script = r#"
+var beverage = "cafe au lait";
+beverage = "espresso";
+var breakfast = "beignets with " + beverage;
+print breakfast;"#;
+        assert_eq!("beignets with espresso", execute_script(script));
+    }
+
+    //     #[test]
+    //     fn late_bound_global_function() {
+    //         let script = r#"
+    // fun showVariable() {
+    //   print global;
+    // }
+
+    // var global = "after";
+    // showVariable();"
+    // "#;
+    //         todo!("{}", script)
+    //     }
 }
