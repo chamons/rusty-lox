@@ -83,7 +83,13 @@ impl Compiler {
                 self.chunk.write(OpCode::Print, *line);
                 Ok(())
             }
-            Statement::Variable { name: _, initializer: _ } => todo!(),
+            Statement::Variable { name, initializer } => {
+                if let Some(initializer) = initializer {
+                    self.compile_expression(initializer)?;
+                } else {
+                }
+                Ok(())
+            }
             Statement::Block { statements: _ } => todo!(),
             Statement::If {
                 condition: _,
@@ -152,8 +158,7 @@ impl Compiler {
             Expression::Grouping { expression, line: _ } => self.compile_expression(unwrap_or_error(expression)?),
             Expression::Literal { value, line } => match value {
                 TokenLiteral::Nil => {
-                    let index = self.chunk.write_value(OpValue::Nil);
-                    self.chunk.write(OpCode::Constant(index), *line);
+                    self.chunk.write(OpCode::Nil, *line);
                     Ok(())
                 }
                 TokenLiteral::String(v) => {
@@ -167,8 +172,11 @@ impl Compiler {
                     Ok(())
                 }
                 TokenLiteral::Boolean(v) => {
-                    let index = self.chunk.write_value(OpValue::Boolean(*v));
-                    self.chunk.write(OpCode::Constant(index), *line);
+                    if *v {
+                        self.chunk.write(OpCode::True, *line);
+                    } else {
+                        self.chunk.write(OpCode::False, *line);
+                    }
                     Ok(())
                 }
             },
@@ -224,16 +232,15 @@ mod tests {
     #[test]
     fn booleans() {
         let (chunk, _) = compile("false + true;").unwrap();
-        assert_eq!(OpCode::Constant(0), chunk.code[0]);
-        assert_eq!(OpCode::Constant(1), chunk.code[1]);
+        assert_eq!(OpCode::False, chunk.code[0]);
+        assert_eq!(OpCode::True, chunk.code[1]);
         assert_eq!(OpCode::Add, chunk.code[2]);
     }
 
     #[test]
     fn nil() {
         let (chunk, _) = compile("nil;").unwrap();
-        assert_eq!(OpCode::Constant(0), chunk.code[0]);
-        assert_eq!(OpValue::Nil, chunk.values[0]);
+        assert_eq!(OpCode::Nil, chunk.code[0]);
     }
 
     #[test]

@@ -30,6 +30,9 @@ pub enum OpCode {
     Less,
     Print,
     Pop,
+    True,
+    False,
+    Nil,
 }
 
 impl OpCode {
@@ -50,6 +53,9 @@ impl OpCode {
             OpCode::Less => "OP_LESS".to_string(),
             OpCode::Print => "OP_PRINT".to_string(),
             OpCode::Pop => "OP_POP".to_string(),
+            OpCode::True => "OP_TRUE".to_string(),
+            OpCode::False => "OP_FALSE".to_string(),
+            OpCode::Nil => "OP_NIL".to_string(),
         }
     }
 }

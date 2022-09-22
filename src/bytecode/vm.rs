@@ -183,6 +183,9 @@ impl VirtualMachine {
                     OpCode::Pop => {
                         self.pop();
                     }
+                    OpCode::True => self.push(OpValue::Boolean(true)),
+                    OpCode::False => self.push(OpValue::Boolean(false)),
+                    OpCode::Nil => self.push(OpValue::Nil),
                 }
                 ip += 1;
             } else {
