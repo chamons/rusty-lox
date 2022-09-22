@@ -25,10 +25,10 @@ impl Chunk {
         self.values.len() - 1
     }
 
-    pub fn disassemble(&self, name: &str) {
+    pub fn disassemble(&self, name: &str, strings: &Interner) {
         println!("== {name} ==");
         for (i, op) in self.code.iter().enumerate() {
-            let instruction = op.disassemble(self);
+            let instruction = op.disassemble(self, strings);
             let line = if i > 0 && self.lines[i] == self.lines[i - 1] {
                 "   | ".to_string()
             } else {
@@ -50,7 +50,7 @@ mod tests {
         chunk.write(OpCode::Constant(index), 1);
         chunk.write(OpCode::Return, 1);
         assert_eq!(OpCode::Return, *chunk.code.last().unwrap());
-        chunk.disassemble("main");
+        chunk.disassemble("main", &Interner::new());
     }
 
     #[test]

@@ -60,7 +60,7 @@ impl Compiler {
             .map_err(|e| CompilerError::ParseError(e.to_string()))?;
         self.chunk.write(OpCode::Return, 99);
         if cfg!(debug_assertions) {
-            self.chunk.disassemble("code");
+            self.chunk.disassemble("code", &self.strings);
         }
         Ok(())
     }

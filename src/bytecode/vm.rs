@@ -90,7 +90,7 @@ impl VirtualMachine {
                     print!("[ {:?} ]", s);
                 }
                 println!();
-                println!("{}", instruction.disassemble(chunk));
+                println!("{}", instruction.disassemble(chunk, &self.strings));
             }
             match instruction {
                 OpCode::Return => {
@@ -236,6 +236,7 @@ mod tests {
     fn string() {
         assert_eq!(Some(true), execute_script("\"asdf\" == \"asdf\";").unwrap().as_boolean());
         assert_eq!(Some(false), execute_script("\"asdf\" == \"asd\";").unwrap().as_boolean());
+        assert_eq!(Some(true), execute_script("\"asdf\" == (\"as\" + \"df\");").unwrap().as_boolean());
 
         let (chunk, strings) = compile("\"as\" + \"df\";").unwrap();
         let mut vm = VirtualMachine::new(strings);
