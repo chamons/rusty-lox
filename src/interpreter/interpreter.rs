@@ -369,7 +369,7 @@ impl Interpreter {
         if let Some(node) = node {
             match &**node {
                 Statement::Expression { expression } => self.execute_expression_statement(expression),
-                Statement::Print { expression } => self.execute_print_statement(expression),
+                Statement::Print { expression, line: _ } => self.execute_print_statement(expression),
                 Statement::Variable { name, initializer } => self.execute_variable_statement(name, initializer),
                 Statement::Block { statements } => self.execute_block_statement(statements),
                 Statement::If {

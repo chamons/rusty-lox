@@ -9,6 +9,7 @@ pub enum Statement {
     },
     Print {
         expression: ChildExpression,
+        line: u32,
     },
     Variable {
         name: Token,
@@ -40,8 +41,8 @@ pub fn create_expression_statement(expression: ChildExpression) -> ChildStatemen
     Some(Box::new(Statement::Expression { expression }))
 }
 
-pub fn create_print_statement(expression: ChildExpression) -> ChildStatement {
-    Some(Box::new(Statement::Print { expression }))
+pub fn create_print_statement(expression: ChildExpression, line: u32) -> ChildStatement {
+    Some(Box::new(Statement::Print { expression, line }))
 }
 
 pub fn create_variable_statement(name: Token, initializer: ChildExpression) -> ChildStatement {

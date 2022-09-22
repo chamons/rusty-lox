@@ -29,6 +29,10 @@ impl Interner {
     pub fn lookup(&self, idx: InternedString) -> &str {
         self.vec[idx.0 as usize].as_str()
     }
+
+    pub fn count(&self) -> usize {
+        self.map.len()
+    }
 }
 
 #[cfg(test)]

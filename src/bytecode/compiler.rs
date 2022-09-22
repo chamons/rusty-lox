@@ -75,7 +75,11 @@ impl Compiler {
     fn compile_statement(&mut self, statement: &Statement) -> Result<()> {
         match statement {
             Statement::Expression { expression } => self.compile_expression(unwrap_or_error(expression)?),
-            Statement::Print { expression: _ } => todo!(),
+            Statement::Print { expression, line } => {
+                self.compile_expression(unwrap_or_error(expression)?)?;
+                self.chunk.write(OpCode::Print, *line);
+                Ok(())
+            }
             Statement::Variable { name: _, initializer: _ } => todo!(),
             Statement::Block { statements: _ } => todo!(),
             Statement::If {
@@ -237,5 +241,15 @@ mod tests {
         let (chunk, _) = compile("\"asdf\";").unwrap();
         assert_eq!(OpCode::Constant(0), chunk.code[0]);
         assert!(matches!(&chunk.values[0], OpValue::Object(_)));
+    }
+
+    #[test]
+    fn print() {
+        let (chunk, strings) = compile("print \"asdf\";").unwrap();
+        assert_eq!(OpCode::Constant(0), chunk.code[0]);
+        assert_eq!(OpCode::Print, chunk.code[1]);
+        assert_eq!(OpCode::Return, chunk.code[2]);
+
+        assert_eq!(1, strings.count());
     }
 }

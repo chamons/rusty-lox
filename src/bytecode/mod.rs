@@ -28,6 +28,7 @@ pub enum OpCode {
     Equal,
     Greater,
     Less,
+    Print,
 }
 
 impl OpCode {
@@ -35,16 +36,7 @@ impl OpCode {
         match self {
             OpCode::Return => "OP_RETURN".to_string(),
             OpCode::Constant(index) => {
-                let value = &chunk.values[*index];
-                let value = match value {
-                    OpValue::Double(v) => v.to_string(),
-                    OpValue::Boolean(v) => v.to_string(),
-                    OpValue::Nil => "nil".to_string(),
-                    OpValue::Object(v) => match v {
-                        ObjectType::String(interned) => strings.lookup(*interned).to_string(),
-                    },
-                };
-                format!("OP_CONSTANT\t{} {:?}", index, value)
+                format!("OP_CONSTANT\t{} {:?}", index, chunk.values[*index].print(strings))
             }
             OpCode::Negate => "OP_NEGATE".to_string(),
             OpCode::Add => "OP_ADD".to_string(),
@@ -55,6 +47,7 @@ impl OpCode {
             OpCode::Equal => "OP_EQUAL".to_string(),
             OpCode::Greater => "OP_GREATER".to_string(),
             OpCode::Less => "OP_LESS".to_string(),
+            OpCode::Print => "OP_PRINT".to_string(),
         }
     }
 }
@@ -100,6 +93,17 @@ impl OpValue {
                 ObjectType::String(v) => Some(*v),
             },
             _ => None,
+        }
+    }
+
+    pub fn print(&self, strings: &Interner) -> String {
+        match self {
+            OpValue::Double(v) => v.to_string(),
+            OpValue::Boolean(v) => v.to_string(),
+            OpValue::Nil => "nil".to_string(),
+            OpValue::Object(v) => match v {
+                ObjectType::String(interned) => strings.lookup(*interned).to_string(),
+            },
         }
     }
 }

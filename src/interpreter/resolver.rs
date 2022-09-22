@@ -100,7 +100,7 @@ impl Resolver {
                     then_branch,
                     else_branch,
                 } => self.resolve_conditional_statement(condition, then_branch, else_branch),
-                Statement::Print { expression } => self.resolve_expression(expression),
+                Statement::Print { expression, line: _ } => self.resolve_expression(expression),
                 Statement::Return { value } => self.resolve_return_statement(value),
                 Statement::While { condition, body } => self.resolve_while_statement(condition, body),
             }

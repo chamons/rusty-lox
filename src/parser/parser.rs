@@ -159,9 +159,10 @@ impl<'a> Parser<'a> {
     }
 
     fn print_statement(&mut self) -> Result<ChildStatement, &'static str> {
+        let line = self.line();
         let value = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
-        Ok(create_print_statement(value))
+        Ok(create_print_statement(value, line))
     }
 
     fn expression_statement(&mut self) -> Result<ChildStatement, &'static str> {
