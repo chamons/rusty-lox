@@ -30,8 +30,8 @@ impl VirtualMachine {
         self
     }
 
-    pub fn with_print(mut self, print: Option<Box<dyn FnMut(&str)>>) -> Self {
-        self.print = print;
+    pub fn with_print(mut self, print: Box<dyn FnMut(&str)>) -> Self {
+        self.print = Some(print);
         self
     }
 
@@ -222,7 +222,7 @@ mod tests {
         let print_ref = prints.clone();
         let mut vm = VirtualMachine::new()
             .with_strings(strings)
-            .with_print(Some(Box::new(move |s| print_ref.borrow_mut().push(s.to_string()))));
+            .with_print(Box::new(move |s| print_ref.borrow_mut().push(s.to_string())));
         assert!(vm.interpret(&chunk).is_ok());
         let print = prints.borrow();
         print.clone()
