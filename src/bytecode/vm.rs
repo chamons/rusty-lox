@@ -12,11 +12,12 @@ pub enum InterpretError {
 
 pub struct VirtualMachine {
     stack: Vec<OpValue>,
+    strings: Interner,
 }
 
 impl VirtualMachine {
-    pub fn new() -> Self {
-        VirtualMachine { stack: vec![] }
+    pub fn new(strings: Interner) -> Self {
+        VirtualMachine { stack: vec![], strings }
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretError> {
@@ -70,10 +71,10 @@ impl VirtualMachine {
         Err(InterpretError::RuntimeError)
     }
 
-    fn pop_as_string(&mut self) -> Result<String, InterpretError> {
+    fn pop_as_string(&mut self) -> Result<&str, InterpretError> {
         if let Some(v) = self.pop() {
             if let Some(v) = v.as_string() {
-                return Ok(v);
+                return Ok(self.strings.lookup(v));
             }
         }
         Err(InterpretError::RuntimeError)
@@ -110,10 +111,11 @@ impl VirtualMachine {
                     if matches!(self.peek(0), Some(OpValue::Object(ObjectType::String(_))))
                         && matches!(self.peek(1), Some(OpValue::Object(ObjectType::String(_))))
                     {
-                        let v2 = self.pop_as_string()?;
+                        let v2 = self.pop_as_string()?.to_string();
                         let v1 = self.pop_as_string()?;
-
-                        self.push(OpValue::Object(ObjectType::String(Rc::new(v1 + &v2))));
+                        let combined = &format!("{v1}{v2}");
+                        let combined = self.strings.intern(combined);
+                        self.push(OpValue::Object(ObjectType::String(combined)));
                     } else {
                         let v2 = self.pop_as_double()?;
                         let v1 = self.pop_as_double()?;
@@ -167,19 +169,19 @@ mod tests {
         let index = chunk.write_value(OpValue::Double(1.2));
         chunk.write(OpCode::Constant(index), 1);
         chunk.write(OpCode::Return, 1);
-        let mut vm = VirtualMachine::new();
+        let mut vm = VirtualMachine::new(Interner::new());
         assert!(vm.interpret(&chunk).is_ok());
     }
 
     fn assert_runtime_error(script: &str) {
-        let chunk = compile(script).unwrap();
-        let mut vm = VirtualMachine::new();
+        let (chunk, strings) = compile(script).unwrap();
+        let mut vm = VirtualMachine::new(strings);
         assert!(vm.interpret(&chunk).is_err());
     }
 
     fn execute_script(script: &str) -> Option<OpValue> {
-        let chunk = compile(script).unwrap();
-        let mut vm = VirtualMachine::new();
+        let (chunk, strings) = compile(script).unwrap();
+        let mut vm = VirtualMachine::new(strings);
         assert!(vm.interpret(&chunk).is_ok());
         vm.stack.first().cloned()
     }
@@ -235,6 +237,9 @@ mod tests {
         assert_eq!(Some(true), execute_script("\"asdf\" == \"asdf\";").unwrap().as_boolean());
         assert_eq!(Some(false), execute_script("\"asdf\" == \"asd\";").unwrap().as_boolean());
 
-        assert_eq!("asdf", execute_script("\"as\" + \"df\";").unwrap().as_string().unwrap());
+        let (chunk, strings) = compile("\"as\" + \"df\";").unwrap();
+        let mut vm = VirtualMachine::new(strings);
+        assert!(vm.interpret(&chunk).is_ok());
+        assert_eq!(vm.strings.intern("asdf"), vm.stack.first().cloned().unwrap().as_string().unwrap());
     }
 }

@@ -10,6 +10,7 @@
     "fdsa",
     "Hashable",
     "Hasher",
+    "Interner",
     "interp",
     "lexme",
     "nonexistant",

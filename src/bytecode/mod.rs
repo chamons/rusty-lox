@@ -1,4 +1,4 @@
-use std::{fmt::Debug, rc::Rc};
+use std::fmt::Debug;
 
 mod frontend;
 pub use frontend::*;
@@ -11,6 +11,9 @@ pub use vm::*;
 
 mod compiler;
 pub use compiler::*;
+
+mod intern;
+pub use intern::*;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum OpCode {
@@ -55,7 +58,7 @@ pub enum OpValue {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Clone)]
 pub enum ObjectType {
-    String(Rc<String>),
+    String(InternedString),
 }
 
 impl OpValue {
@@ -80,10 +83,10 @@ impl OpValue {
         }
     }
 
-    fn as_string(&self) -> Option<String> {
+    fn as_string(&self) -> Option<InternedString> {
         match self {
             OpValue::Object(o) => match o {
-                ObjectType::String(v) => Some(v.to_string()),
+                ObjectType::String(v) => Some(*v),
             },
             _ => None,
         }
