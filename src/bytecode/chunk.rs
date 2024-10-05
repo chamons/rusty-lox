@@ -37,6 +37,10 @@ impl Chunk {
     pub fn line(&self, index: u32) -> u32 {
         self.lines.get(index).expect("Unknown line for index {index}")
     }
+
+    pub fn code(&self) -> &[Instruction] {
+        &self.code
+    }
 }
 
 impl Display for Chunk {

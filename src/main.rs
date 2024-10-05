@@ -1,3 +1,8 @@
-mod bytecode;
+use vm::VM;
 
-fn main() {}
+mod bytecode;
+mod vm;
+
+fn main() {
+    let vm = VM::default();
+}
