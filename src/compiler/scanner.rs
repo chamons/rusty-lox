@@ -1,7 +1,3 @@
-use std::{iter::Peekable, ops::Index, str::Chars};
-
-use itertools::{Itertools, MultiPeek};
-
 use super::{
     source::Source,
     token::{Token, TokenType},
@@ -13,7 +9,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(source: &'a String) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Self {
             source: Source::new(source),
             line: 1,
@@ -26,7 +22,7 @@ impl<'a> Scanner<'a> {
         let c = match self.advance() {
             Some(c) => c,
             None => {
-                return self.token(TokenType::EOF);
+                return self.token(TokenType::Eof);
             }
         };
 
@@ -133,28 +129,28 @@ mod tests {
     use super::Scanner;
 
     #[rstest]
-    #[case("", vec![TokenType::EOF])]
-    #[case("+-/*", vec![TokenType::Plus, TokenType::Minus, TokenType::Slash, TokenType::Star, TokenType::EOF])]
-    #[case("()", vec![TokenType::LeftParen, TokenType::RightParen, TokenType::EOF])]
-    #[case("{}", vec![TokenType::LeftBrace, TokenType::RightBrace, TokenType::EOF])]
-    #[case(";.,", vec![TokenType::Semicolon, TokenType::Dot, TokenType::Comma, TokenType::EOF])]
-    #[case("=", vec![TokenType::Equal, TokenType::EOF])]
-    #[case("==", vec![TokenType::EqualEqual, TokenType::EOF])]
-    #[case(">", vec![TokenType::Greater, TokenType::EOF])]
-    #[case(">=", vec![TokenType::GreaterEqual, TokenType::EOF])]
-    #[case("<", vec![TokenType::Less, TokenType::EOF])]
-    #[case("<=", vec![TokenType::LessEqual, TokenType::EOF])]
-    #[case("!", vec![TokenType::Bang, TokenType::EOF])]
-    #[case("!=", vec![TokenType::BangEqual, TokenType::EOF])]
-    #[case("   + -", vec![TokenType::Plus, TokenType::Minus, TokenType::EOF])]
-    #[case("+ // This is a comment", vec![TokenType::Plus, TokenType::EOF])]
+    #[case("", vec![TokenType::Eof])]
+    #[case("+-/*", vec![TokenType::Plus, TokenType::Minus, TokenType::Slash, TokenType::Star, TokenType::Eof])]
+    #[case("()", vec![TokenType::LeftParen, TokenType::RightParen, TokenType::Eof])]
+    #[case("{}", vec![TokenType::LeftBrace, TokenType::RightBrace, TokenType::Eof])]
+    #[case(";.,", vec![TokenType::Semicolon, TokenType::Dot, TokenType::Comma, TokenType::Eof])]
+    #[case("=", vec![TokenType::Equal, TokenType::Eof])]
+    #[case("==", vec![TokenType::EqualEqual, TokenType::Eof])]
+    #[case(">", vec![TokenType::Greater, TokenType::Eof])]
+    #[case(">=", vec![TokenType::GreaterEqual, TokenType::Eof])]
+    #[case("<", vec![TokenType::Less, TokenType::Eof])]
+    #[case("<=", vec![TokenType::LessEqual, TokenType::Eof])]
+    #[case("!", vec![TokenType::Bang, TokenType::Eof])]
+    #[case("!=", vec![TokenType::BangEqual, TokenType::Eof])]
+    #[case("   + -", vec![TokenType::Plus, TokenType::Minus, TokenType::Eof])]
+    #[case("+ // This is a comment", vec![TokenType::Plus, TokenType::Eof])]
     fn expected_values(#[case] input: String, #[case] expected: Vec<TokenType>) {
         let mut scanner = Scanner::new(&input);
         let mut output = vec![];
         loop {
             let current = scanner.scan().unwrap().token_type;
             output.push(current);
-            if current == TokenType::EOF {
+            if current == TokenType::Eof {
                 break;
             }
         }
@@ -175,6 +171,6 @@ mod tests {
         assert_eq!(token.token_type, TokenType::Minus);
         let token = scanner.scan().unwrap();
         assert_eq!(token.line, 2);
-        assert_eq!(token.token_type, TokenType::EOF);
+        assert_eq!(token.token_type, TokenType::Eof);
     }
 }

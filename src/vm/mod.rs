@@ -29,7 +29,7 @@ impl VM {
         }
     }
 
-    pub fn interpret(&mut self, source: &String) -> Result<(), InterpretErrors> {
+    pub fn interpret(&mut self, _source: &str) -> Result<(), InterpretErrors> {
         Ok(())
     }
 
@@ -82,8 +82,6 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
-    use tracing::level_filters::LevelFilter;
-
     use crate::bytecode::{Chunk, Instruction, Value};
 
     use super::VM;

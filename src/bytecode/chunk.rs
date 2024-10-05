@@ -31,7 +31,7 @@ impl Chunk {
     }
 
     pub fn constant(&self, index: usize) -> &Value {
-        &self.constants[index as usize]
+        &self.constants[index]
     }
 
     pub fn line(&self, index: u32) -> u32 {

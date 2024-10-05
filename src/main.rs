@@ -1,3 +1,5 @@
+#![allow(dead_code, unreachable_patterns)]
+
 use eyre::eyre;
 use std::{env::args, fs, io::Write};
 
@@ -13,7 +15,7 @@ fn repl() -> eyre::Result<()> {
     let mut vm = VM::default();
 
     println!("Type exit to quit");
-    println!("");
+    println!();
     loop {
         print!("> ");
         std::io::stdout().flush()?;
@@ -44,7 +46,7 @@ fn main() -> eyre::Result<()> {
 
     match args().len() {
         1 => repl(),
-        2 => run_file(args().skip(1).next().unwrap().to_string()),
+        2 => run_file(args().nth(1).unwrap().to_string()),
         _ => Err(eyre!("Usage: rusty-lox [path]")),
     }
 }

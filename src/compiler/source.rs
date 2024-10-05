@@ -9,7 +9,7 @@ pub struct Source<'a> {
 }
 
 impl<'a> Source<'a> {
-    pub fn new(source: &'a String) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Self {
             characters: source.chars().peekable(),
             buffered: None,

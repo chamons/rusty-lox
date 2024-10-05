@@ -4,8 +4,8 @@ mod scanner;
 mod source;
 mod token;
 
-pub fn compile(source: &String) -> eyre::Result<()> {
-    let scanner = Scanner::new(source);
+pub fn compile(source: &str) -> eyre::Result<()> {
+    let _scanner = Scanner::new(source);
 
     Ok(())
 }
@@ -16,6 +16,6 @@ mod tests {
 
     #[test]
     fn compile_hello_world() {
-        compile(&"1 + 2".to_string()).unwrap();
+        compile("1 + 2").unwrap();
     }
 }
