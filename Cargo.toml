@@ -8,3 +8,6 @@ eyre = "0.6.12"
 thiserror = "1.0.64"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+[dev-dependencies]
+rstest = "0.23.0"
