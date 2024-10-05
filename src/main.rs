@@ -4,10 +4,10 @@ use std::{env::args, fs, io::Write};
 use vm::VM;
 
 mod bytecode;
-mod vm;
-
+mod compiler;
 mod tracing;
 mod utils;
+mod vm;
 
 fn repl() -> eyre::Result<()> {
     let mut vm = VM::default();
