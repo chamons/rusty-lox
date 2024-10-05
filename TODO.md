@@ -1,4 +1,0 @@
-- Get a compressed version of lines
-- Serialize chunk
-- feature: Long Constant
-- 
