@@ -29,7 +29,11 @@ impl VM {
         }
     }
 
-    pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
+    pub fn interpret(&mut self, source: &str) -> Result<(), InterpretErrors> {
+        Ok(())
+    }
+
+    pub fn interpret_chunk(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
         for instruction in chunk.code() {
             trace!(?instruction, stack = ?self.stack, "Interpreting");
 
@@ -91,7 +95,7 @@ mod tests {
         chunk.write(Instruction::Return, 123);
 
         let mut vm = VM::default();
-        vm.interpret(&chunk).unwrap();
+        vm.interpret_chunk(&chunk).unwrap();
     }
 
     #[test]
@@ -106,7 +110,7 @@ mod tests {
         chunk.write(Instruction::Return, 125);
 
         let mut vm = VM::default();
-        vm.interpret(&chunk).unwrap();
+        vm.interpret_chunk(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Double(-0.8214285714285714));
     }
 }
