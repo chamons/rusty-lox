@@ -11,6 +11,11 @@ pub enum Instruction {
     Return,
     Constant { index: u8 },
     LongConstant { index: u32 },
+    Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl Instruction {
@@ -28,11 +33,16 @@ impl Instruction {
             Instruction::Return => f.write_str("OP_RETURN"),
             Instruction::Constant { index } => f.write_fmt(format_args!("OP_CONSTANT {index} '{}'", chunk.constant(*index as usize))),
             Instruction::LongConstant { index } => f.write_fmt(format_args!("OP_LONG_CONSTANT {index} '{}'", chunk.constant(*index as usize))),
+            Instruction::Negate => f.write_str("OP_NEGATE"),
+            Instruction::Add => f.write_str("OP_ADD"),
+            Instruction::Subtract => f.write_str("OP_SUBTRACT"),
+            Instruction::Multiply => f.write_str("OP_MULTIPLY"),
+            Instruction::Divide => f.write_str("OP_DIVIDE"),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Double(f64),
 }
