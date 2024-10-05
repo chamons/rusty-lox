@@ -1,7 +1,10 @@
-mod chunk;
 use std::fmt::Display;
 
+mod chunk;
 pub use chunk::*;
+
+mod lines;
+pub use lines::*;
 
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
@@ -10,7 +13,7 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    pub fn disassemble(&self, f: &mut std::fmt::Formatter<'_>, offset: usize, chunk: &Chunk) -> std::fmt::Result {
+    pub fn disassemble(&self, f: &mut std::fmt::Formatter<'_>, offset: u32, chunk: &Chunk) -> std::fmt::Result {
         f.write_fmt(format_args!("{offset:4} "))?;
 
         let line = chunk.line(offset);

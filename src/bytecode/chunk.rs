@@ -1,12 +1,12 @@
 use std::fmt::Display;
 
-use super::{Instruction, Value};
+use super::{Instruction, Lines, Value};
 
 #[derive(Debug, Default)]
 pub struct Chunk {
     code: Vec<Instruction>,
     constants: Vec<Value>,
-    lines: Vec<u64>,
+    lines: Lines,
 }
 
 impl Chunk {
@@ -14,7 +14,7 @@ impl Chunk {
         Self::default()
     }
 
-    pub fn write(&mut self, instruction: Instruction, line: u64) {
+    pub fn write(&mut self, instruction: Instruction, line: u32) {
         self.code.push(instruction);
         self.lines.push(line);
     }
@@ -23,15 +23,15 @@ impl Chunk {
         &self.constants[index as usize]
     }
 
-    pub fn line(&self, index: usize) -> u64 {
-        self.lines[index]
+    pub fn line(&self, index: u32) -> u32 {
+        self.lines.get(index).expect("Unknown line for index {index}")
     }
 }
 
 impl Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (offset, instruction) in self.code.iter().enumerate() {
-            instruction.disassemble(f, offset, self)?;
+            instruction.disassemble(f, offset as u32, self)?;
             f.write_str("\n")?;
         }
         Ok(())
