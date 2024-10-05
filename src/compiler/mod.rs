@@ -1,6 +1,7 @@
 use scanner::Scanner;
 
 mod scanner;
+mod source;
 mod token;
 
 pub fn compile(source: &String) -> eyre::Result<()> {

@@ -2,19 +2,20 @@ use std::{iter::Peekable, ops::Index, str::Chars};
 
 use itertools::{Itertools, MultiPeek};
 
-use super::token::{Token, TokenType};
+use super::{
+    source::Source,
+    token::{Token, TokenType},
+};
 
 pub struct Scanner<'a> {
-    source: &'a String,
-    characters: Peekable<Chars<'a>>,
+    source: Source<'a>,
     line: u32,
 }
 
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a String) -> Self {
         Self {
-            source,
-            characters: source.chars().peekable(),
+            source: Source::new(source),
             line: 1,
         }
     }
@@ -68,14 +69,14 @@ impl<'a> Scanner<'a> {
     }
 
     fn advance(&mut self) -> Option<char> {
-        self.characters.next()
+        self.source.next()
     }
 
     fn match_character(&mut self, expected: char) -> bool {
-        match self.characters.peek() {
+        match self.source.peek() {
             Some(c) => {
-                if *c == expected {
-                    _ = self.characters.next();
+                if c == expected {
+                    _ = self.advance();
                     true
                 } else {
                     false
@@ -87,13 +88,29 @@ impl<'a> Scanner<'a> {
 
     fn skip_whitespace(&mut self) {
         loop {
-            match self.characters.peek() {
+            match self.source.peek() {
                 Some(' ') | Some('\t') | Some('\r') => {
                     self.advance();
                 }
                 Some('\n') => {
                     self.line += 1;
                     self.advance();
+                }
+                Some('/') => {
+                    if self.source.peek_two() == Some('/') {
+                        loop {
+                            match self.source.peek() {
+                                Some('\n') | None => {
+                                    break;
+                                }
+                                _ => {
+                                    self.advance();
+                                }
+                            }
+                        }
+                    } else {
+                        return;
+                    }
                 }
                 _ => {
                     return;
@@ -130,6 +147,7 @@ mod tests {
     #[case("!", vec![TokenType::Bang, TokenType::EOF])]
     #[case("!=", vec![TokenType::BangEqual, TokenType::EOF])]
     #[case("   + -", vec![TokenType::Plus, TokenType::Minus, TokenType::EOF])]
+    #[case("+ // This is a comment", vec![TokenType::Plus, TokenType::EOF])]
     fn expected_values(#[case] input: String, #[case] expected: Vec<TokenType>) {
         let mut scanner = Scanner::new(&input);
         let mut output = vec![];
