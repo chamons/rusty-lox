@@ -10,6 +10,7 @@ pub use lines::*;
 pub enum Instruction {
     Return,
     Constant { index: u8 },
+    LongConstant { index: u32 },
 }
 
 impl Instruction {
@@ -25,7 +26,8 @@ impl Instruction {
 
         match self {
             Instruction::Return => f.write_str("OP_RETURN"),
-            Instruction::Constant { index } => f.write_fmt(format_args!("OP_CONSTANT {index} '{}'", chunk.constant(*index))),
+            Instruction::Constant { index } => f.write_fmt(format_args!("OP_CONSTANT {index} '{}'", chunk.constant(*index as usize))),
+            Instruction::LongConstant { index } => f.write_fmt(format_args!("OP_LONG_CONSTANT {index} '{}'", chunk.constant(*index as usize))),
         }
     }
 }

@@ -19,7 +19,18 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn constant(&self, index: u8) -> &Value {
+    pub fn write_constant(&mut self, value: Value, line: u32) {
+        self.constants.push(value);
+        let index = self.constants.len() - 1;
+
+        if index > u8::MAX as usize {
+            self.write(Instruction::LongConstant { index: index as u32 }, line);
+        } else {
+            self.write(Instruction::Constant { index: index as u8 }, line);
+        }
+    }
+
+    pub fn constant(&self, index: usize) -> &Value {
         &self.constants[index as usize]
     }
 
@@ -40,21 +51,36 @@ impl Display for Chunk {
 
 #[cfg(test)]
 mod tests {
-    use crate::bytecode::{self, Value};
+    use crate::bytecode::{Instruction, Value};
 
     use super::Chunk;
 
     #[test]
     fn disassemble_chunk() {
         let mut chunk = Chunk::new();
-        chunk.write(bytecode::Instruction::Constant { index: 0 }, 123);
-        chunk.write(bytecode::Instruction::Return, 123);
+        chunk.write(Instruction::Constant { index: 0 }, 123);
+        chunk.write(Instruction::LongConstant { index: 1 }, 1230);
+        chunk.write(Instruction::Return, 123);
         chunk.constants.push(Value::Double(1.2));
+        chunk.constants.push(Value::Double(12.2));
 
         let output = chunk.to_string();
+        // println!("{output}");
+
         const EXPECTED: &str = "   0  123 OP_CONSTANT 0 '1.2'
-   1    | OP_RETURN
+   1 1230 OP_LONG_CONSTANT 1 '12.2'
+   2  123 OP_RETURN
 ";
         assert_eq!(output, EXPECTED);
+    }
+
+    #[test]
+    fn write_constant() {
+        let mut chunk = Chunk::new();
+        for i in 0..260 {
+            chunk.write_constant(Value::Double(i as f64), 123);
+        }
+        assert!(matches!(chunk.code[255], Instruction::Constant { .. }));
+        assert!(matches!(chunk.code[256], Instruction::LongConstant { .. }));
     }
 }

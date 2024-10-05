@@ -61,6 +61,7 @@ mod tests {
         lines.push(123);
         lines.push(124);
         lines.push(125);
+
         assert_eq!(
             [Some(123), Some(123), Some(124), Some(125), None],
             *(0..5).map(|i| lines.get(i)).collect::<Vec<_>>()
