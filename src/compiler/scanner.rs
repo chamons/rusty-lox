@@ -1,5 +1,7 @@
 use std::{iter::Peekable, ops::Index, str::Chars};
 
+use itertools::{Itertools, MultiPeek};
+
 use super::token::{Token, TokenType};
 
 pub struct Scanner<'a> {
@@ -13,11 +15,13 @@ impl<'a> Scanner<'a> {
         Self {
             source,
             characters: source.chars().peekable(),
-            line: 0,
+            line: 1,
         }
     }
 
     pub fn scan(&mut self) -> eyre::Result<Token> {
+        self.skip_whitespace();
+
         let c = match self.advance() {
             Some(c) => c,
             None => {
@@ -60,7 +64,7 @@ impl<'a> Scanner<'a> {
             _ => {}
         }
 
-        Err(eyre::eyre!("Unexpected character"))
+        Err(eyre::eyre!("Unexpected character {c}"))
     }
 
     fn advance(&mut self) -> Option<char> {
@@ -78,6 +82,23 @@ impl<'a> Scanner<'a> {
                 }
             }
             None => false,
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        loop {
+            match self.characters.peek() {
+                Some(' ') | Some('\t') | Some('\r') => {
+                    self.advance();
+                }
+                Some('\n') => {
+                    self.line += 1;
+                    self.advance();
+                }
+                _ => {
+                    return;
+                }
+            }
         }
     }
 
@@ -108,6 +129,7 @@ mod tests {
     #[case("<=", vec![TokenType::LessEqual, TokenType::EOF])]
     #[case("!", vec![TokenType::Bang, TokenType::EOF])]
     #[case("!=", vec![TokenType::BangEqual, TokenType::EOF])]
+    #[case("   + -", vec![TokenType::Plus, TokenType::Minus, TokenType::EOF])]
     fn expected_values(#[case] input: String, #[case] expected: Vec<TokenType>) {
         let mut scanner = Scanner::new(&input);
         let mut output = vec![];
@@ -119,5 +141,22 @@ mod tests {
             }
         }
         assert_eq!(expected, output);
+    }
+
+    #[test]
+    fn multiline() {
+        let input = "+
+        -"
+        .to_string();
+        let mut scanner = Scanner::new(&input);
+        let token = scanner.scan().unwrap();
+        assert_eq!(token.line, 1);
+        assert_eq!(token.token_type, TokenType::Plus);
+        let token = scanner.scan().unwrap();
+        assert_eq!(token.line, 2);
+        assert_eq!(token.token_type, TokenType::Minus);
+        let token = scanner.scan().unwrap();
+        assert_eq!(token.line, 2);
+        assert_eq!(token.token_type, TokenType::EOF);
     }
 }
