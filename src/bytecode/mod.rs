@@ -1,5 +1,5 @@
 mod chunk;
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
 pub use chunk::*;
 

@@ -50,6 +50,11 @@ mod tests {
         chunk.write(bytecode::Instruction::Constant { index: 0 }, 123);
         chunk.write(bytecode::Instruction::Return, 123);
         chunk.constants.push(Value::Double(1.2));
-        println!("{chunk}");
+
+        let output = chunk.to_string();
+        const EXPECTED: &str = "   0  123 OP_CONSTANT 0 '1.2'
+   1    | OP_RETURN
+";
+        assert_eq!(output, EXPECTED);
     }
 }
