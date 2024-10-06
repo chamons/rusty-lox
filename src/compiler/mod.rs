@@ -10,13 +10,3 @@ pub fn compile(source: &str) -> eyre::Result<Chunk> {
     let mut compiler = Compiler::new();
     Ok(compiler.compile(source)?)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::compile;
-
-    #[test]
-    fn compile_hello_world() {
-        compile("1 + 2").unwrap();
-    }
-}

@@ -207,9 +207,11 @@ impl Compiler {
             return Err(eyre::eyre!("Expect expression"));
         }
 
-        while precedence < get_parse_rule(&parser.current.token_type).precedence {
+        while precedence <= get_parse_rule(&parser.current.token_type).precedence {
             parser.advance()?;
             let rule = get_parse_rule(&parser.previous.token_type);
+            info!(precedence = ?rule.precedence, "parse_precedence inner");
+
             if let Some(infix) = &rule.infix {
                 infix(self, parser)?;
             } else {

@@ -42,6 +42,10 @@ impl VM {
         })
     }
 
+    pub fn stack_top(&self) -> Option<&Value> {
+        self.stack.first()
+    }
+
     pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
         for instruction in chunk.code() {
             trace!(?instruction, stack = ?self.stack, "Interpreting");
