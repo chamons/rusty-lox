@@ -245,7 +245,7 @@ impl<'a> Scanner<'a> {
 mod tests {
     use rstest::rstest;
 
-    use crate::compiler::parser::token::TokenType;
+    use crate::compiler::tokens::token::TokenType;
 
     use super::Scanner;
 
