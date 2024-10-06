@@ -32,31 +32,31 @@ impl Display for ParserError {
 }
 
 pub struct Parser<'a> {
-    pub previous: Option<Token>,
-    pub current: Option<Token>,
+    pub previous: Token,
+    pub current: Token,
     scanner: Scanner<'a>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source: &'a str) -> Parser<'a> {
-        let scanner = Scanner::new(source);
+    pub fn new(source: &'a str) -> Result<Parser<'a>, ParserError> {
+        let mut scanner = Scanner::new(source);
 
-        Self {
-            previous: None,
-            current: None,
+        let first = scanner.scan().map_err(|err| ParserError { err, token: None })?;
+
+        Ok(Self {
+            previous: first.clone(),
+            current: first,
             scanner,
-        }
+        })
     }
 
     pub fn advance(&mut self) -> Result<(), ParserError> {
-        self.previous = self.current.take();
-
         let next = self.scanner.scan().map_err(|err| ParserError {
             err,
-            token: self.previous.clone(),
+            token: Some(self.previous.clone()),
         })?;
 
-        self.current = Some(next);
+        self.previous = std::mem::replace(&mut self.current, next);
 
         Ok(())
     }
