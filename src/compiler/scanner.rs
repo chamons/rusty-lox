@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::{
     source::Source,
     token::{Token, TokenType},
@@ -6,6 +8,7 @@ use super::{
 pub struct Scanner<'a> {
     source: Source<'a>,
     line: u32,
+    keywords: HashMap<String, TokenType>,
 }
 
 impl<'a> Scanner<'a> {
@@ -13,6 +16,24 @@ impl<'a> Scanner<'a> {
         Self {
             source: Source::new(source),
             line: 1,
+            keywords: HashMap::from_iter([
+                ("and".to_string(), TokenType::And),
+                ("class".to_string(), TokenType::Class),
+                ("else".to_string(), TokenType::Else),
+                ("false".to_string(), TokenType::False),
+                ("for".to_string(), TokenType::For),
+                ("fun".to_string(), TokenType::Fun),
+                ("if".to_string(), TokenType::If),
+                ("nil".to_string(), TokenType::Nil),
+                ("or".to_string(), TokenType::Or),
+                ("print".to_string(), TokenType::Print),
+                ("return".to_string(), TokenType::Return),
+                ("super".to_string(), TokenType::Super),
+                ("this".to_string(), TokenType::This),
+                ("true".to_string(), TokenType::True),
+                ("var".to_string(), TokenType::Var),
+                ("while".to_string(), TokenType::While),
+            ]),
         }
     }
 
@@ -28,6 +49,8 @@ impl<'a> Scanner<'a> {
 
         if c.is_digit(10) {
             return self.process_number(c);
+        } else if c.is_alphabetic() {
+            return self.process_identifier(c);
         }
 
         match c {
@@ -162,6 +185,36 @@ impl<'a> Scanner<'a> {
         });
     }
 
+    fn process_identifier(&mut self, starting_character: char) -> eyre::Result<Token> {
+        let mut value = starting_character.to_string();
+        loop {
+            match self.source.peek() {
+                None => {
+                    break;
+                }
+                Some(c) => {
+                    if c.is_alphanumeric() {
+                        value.push(self.advance().unwrap());
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(token_type) = self.keywords.get(&value) {
+            return Ok(Token {
+                token_type: token_type.clone(),
+                line: self.line,
+            });
+        } else {
+            Ok(Token {
+                token_type: TokenType::Identifier(value),
+                line: self.line,
+            })
+        }
+    }
+
     fn consume_numbers(&mut self) -> String {
         let mut value = String::new();
 
@@ -220,6 +273,24 @@ df".to_string()), TokenType::Eof])]
     #[case("9", vec![TokenType::Number("9".to_string()),  TokenType::Eof])]
     #[case("12.3", vec![TokenType::Number("12.3".to_string()),  TokenType::Eof])]
     #[case("= 1234.5 + ", vec![TokenType::Equal, TokenType::Number("1234.5".to_string()), TokenType::Plus, TokenType::Eof])]
+    #[case("x = y + z ", vec![TokenType::Identifier("x".to_string()), TokenType::Equal, TokenType::Identifier("y".to_string()), TokenType::Plus, TokenType::Identifier("z".to_string()), TokenType::Eof])]
+    #[case("and", vec![TokenType::And, TokenType::Eof])]
+    #[case("class", vec![TokenType::Class, TokenType::Eof])]
+    #[case("else", vec![TokenType::Else, TokenType::Eof])]
+    #[case("false", vec![TokenType::False, TokenType::Eof])]
+    #[case("for", vec![TokenType::For, TokenType::Eof])]
+    #[case("fun", vec![TokenType::Fun, TokenType::Eof])]
+    #[case("if", vec![TokenType::If, TokenType::Eof])]
+    #[case("nil", vec![TokenType::Nil, TokenType::Eof])]
+    #[case("or", vec![TokenType::Or, TokenType::Eof])]
+    #[case("print", vec![TokenType::Print, TokenType::Eof])]
+    #[case("return", vec![TokenType::Return, TokenType::Eof])]
+    #[case("super", vec![TokenType::Super, TokenType::Eof])]
+    #[case("this", vec![TokenType::This, TokenType::Eof])]
+    #[case("true", vec![TokenType::True, TokenType::Eof])]
+    #[case("var", vec![TokenType::Var, TokenType::Eof])]
+    #[case("while", vec![TokenType::While, TokenType::Eof])]
+    #[case("var x = 1 + 2.3 // Math!", vec![TokenType::Var, TokenType::Identifier("x".to_string()), TokenType::Equal, TokenType::Number("1".to_string()), TokenType::Plus, TokenType::Number("2.3".to_string()), TokenType::Eof])]
     fn expected_values(#[case] input: String, #[case] expected: Vec<TokenType>) {
         let mut scanner = Scanner::new(&input);
         let mut output = vec![];
