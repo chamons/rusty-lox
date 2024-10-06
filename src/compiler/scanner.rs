@@ -26,6 +26,10 @@ impl<'a> Scanner<'a> {
             }
         };
 
+        if c.is_digit(10) {
+            return self.process_number(c);
+        }
+
         match c {
             '(' => return self.token(TokenType::LeftParen),
             ')' => return self.token(TokenType::RightParen),
@@ -58,6 +62,7 @@ impl<'a> Scanner<'a> {
                 };
                 return self.token(r);
             }
+            '"' => return self.process_string_constant(),
             _ => {}
         }
 
@@ -115,6 +120,69 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    fn process_string_constant(&mut self) -> eyre::Result<Token> {
+        let mut value = String::new();
+        loop {
+            match self.source.peek() {
+                Some('"') | None => {
+                    break;
+                }
+                c => {
+                    value.push(c.unwrap());
+                    if self.source.peek() == Some('\n') {
+                        self.line += 1;
+                    }
+                    self.advance();
+                }
+            }
+        }
+        if self.source.peek().is_none() {
+            return Err(eyre::eyre!("Unterminated String"));
+        }
+        self.advance();
+        return Ok(Token {
+            token_type: TokenType::String(value),
+            line: self.line,
+        });
+    }
+
+    fn process_number(&mut self, starting_character: char) -> eyre::Result<Token> {
+        let mut value = starting_character.to_string();
+        value.push_str(&self.consume_numbers());
+
+        if self.source.peek() == Some('.') && self.source.peek_two().map_or(false, |c| c.is_digit(10)) {
+            value.push('.');
+            self.advance();
+            value.push_str(&self.consume_numbers());
+        }
+
+        return Ok(Token {
+            token_type: TokenType::Number(value),
+            line: self.line,
+        });
+    }
+
+    fn consume_numbers(&mut self) -> String {
+        let mut value = String::new();
+
+        loop {
+            match self.source.peek() {
+                None => {
+                    break;
+                }
+                Some(c) => {
+                    if c.is_numeric() {
+                        value.push(c);
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        return value;
+    }
+
     fn token(&mut self, token_type: TokenType) -> eyre::Result<Token> {
         Ok(Token { token_type, line: self.line })
     }
@@ -144,12 +212,20 @@ mod tests {
     #[case("!=", vec![TokenType::BangEqual, TokenType::Eof])]
     #[case("   + -", vec![TokenType::Plus, TokenType::Minus, TokenType::Eof])]
     #[case("+ // This is a comment", vec![TokenType::Plus, TokenType::Eof])]
+    #[case("\"asdf\"", vec![TokenType::String("asdf".to_string()), TokenType::Eof])]
+    #[case("\"asdf\" + \"fdsa\"", vec![TokenType::String("asdf".to_string()),TokenType::Plus, TokenType::String("fdsa".to_string()),  TokenType::Eof])]
+    #[case("\"as
+df\"", vec![TokenType::String("as
+df".to_string()), TokenType::Eof])]
+    #[case("9", vec![TokenType::Number("9".to_string()),  TokenType::Eof])]
+    #[case("12.3", vec![TokenType::Number("12.3".to_string()),  TokenType::Eof])]
+    #[case("= 1234.5 + ", vec![TokenType::Equal, TokenType::Number("1234.5".to_string()), TokenType::Plus, TokenType::Eof])]
     fn expected_values(#[case] input: String, #[case] expected: Vec<TokenType>) {
         let mut scanner = Scanner::new(&input);
         let mut output = vec![];
         loop {
             let current = scanner.scan().unwrap().token_type;
-            output.push(current);
+            output.push(current.clone());
             if current == TokenType::Eof {
                 break;
             }
@@ -172,5 +248,35 @@ mod tests {
         let token = scanner.scan().unwrap();
         assert_eq!(token.line, 2);
         assert_eq!(token.token_type, TokenType::Eof);
+    }
+
+    #[test]
+    fn multiline_string_constant() {
+        let input = "\"a
+b
+c
+d\""
+        .to_string();
+
+        let mut scanner = Scanner::new(&input);
+        let token = scanner.scan().unwrap();
+        assert_eq!(token.line, 4);
+        assert_eq!(
+            token.token_type,
+            TokenType::String(
+                "a
+b
+c
+d"
+                .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn unterminated_string_constant() {
+        let input = "\"asdf".to_string();
+        let mut scanner = Scanner::new(&input);
+        assert!(scanner.scan().is_err());
     }
 }

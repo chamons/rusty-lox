@@ -4,7 +4,7 @@ pub struct Token {
     pub line: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -31,8 +31,8 @@ pub enum TokenType {
 
     // Literals.
     Identifier,
-    String,
-    Number,
+    String(String),
+    Number(String),
 
     // Keywords.
     And,
