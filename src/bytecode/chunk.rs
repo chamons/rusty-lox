@@ -45,6 +45,7 @@ impl Chunk {
 
 impl Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("\n")?;
         for (offset, instruction) in self.code.iter().enumerate() {
             instruction.disassemble(f, offset as u32, self)?;
             f.write_str("\n")?;
@@ -71,7 +72,8 @@ mod tests {
         let output = chunk.to_string();
         // println!("{output}");
 
-        const EXPECTED: &str = "   0  123 OP_CONSTANT 0 '1.2'
+        const EXPECTED: &str = "
+   0  123 OP_CONSTANT 0 '1.2'
    1 1230 OP_LONG_CONSTANT 1 '12.2'
    2  123 OP_RETURN
 ";
