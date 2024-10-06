@@ -2,9 +2,9 @@ use compiler::Compiler;
 
 use crate::bytecode::Chunk;
 
-mod compiler;
-mod parser;
-mod tokens;
+pub mod compiler;
+pub mod parser;
+pub mod tokens;
 
 pub fn compile(source: &str) -> eyre::Result<Chunk> {
     let mut compiler = Compiler::new();

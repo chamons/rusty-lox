@@ -1,16 +1,11 @@
 #![allow(dead_code, unreachable_patterns)]
 
-use compiler::compile;
 use eyre::eyre;
 use std::{env::args, fs, io::Write};
 
-use vm::VM;
-
-mod bytecode;
-mod compiler;
-mod tracing;
-mod utils;
-mod vm;
+use rusty_lox::compiler::compile;
+use rusty_lox::tracing::configure_tracing;
+use rusty_lox::vm::VM;
 
 fn repl() -> eyre::Result<()> {
     let mut vm = VM::default();
@@ -23,7 +18,7 @@ fn repl() -> eyre::Result<()> {
 
         let mut line = String::new();
         std::io::stdin().read_line(&mut line)?;
-        utils::trim_newline(&mut line);
+        rusty_lox::utils::trim_newline(&mut line);
 
         if line == "exit" {
             return Ok(());
@@ -47,7 +42,7 @@ fn run_file(path: String) -> eyre::Result<()> {
 }
 
 fn main() -> eyre::Result<()> {
-    tracing::configure_tracing(::tracing::level_filters::LevelFilter::TRACE);
+    configure_tracing(::tracing::level_filters::LevelFilter::TRACE);
 
     match args().len() {
         1 => repl(),
