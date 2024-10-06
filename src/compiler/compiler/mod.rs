@@ -1,9 +1,92 @@
+use tracing::{error, info};
+
 use crate::{
     bytecode::{Chunk, Instruction, Value},
     compiler::parser::Parser,
 };
 
 use super::tokens::token::TokenType;
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Precedence {
+    None = 0,
+    Assignment = 1, // =
+    Or = 2,         // or
+    And = 3,        // and
+    Equality = 4,   // == !=
+    Comparison = 5, // < > <= >=
+    Term = 6,       // + -
+    Factor = 7,     // * /
+    Unary = 8,      // ! -
+    Call = 9,       // . ()
+    Primary = 10,
+}
+
+impl Precedence {
+    pub fn one_higher(&self) -> Precedence {
+        match self {
+            Precedence::None => Precedence::Assignment,
+            Precedence::Assignment => Precedence::Or,
+            Precedence::Or => Precedence::And,
+            Precedence::And => Precedence::Equality,
+            Precedence::Equality => Precedence::Comparison,
+            Precedence::Comparison => Precedence::Term,
+            Precedence::Term => Precedence::Factor,
+            Precedence::Factor => Precedence::Unary,
+            Precedence::Unary => Precedence::Call,
+            Precedence::Call => Precedence::Primary,
+            Precedence::Primary => Precedence::Primary,
+        }
+    }
+}
+
+type ParseFunction = fn(&mut Compiler, parser: &mut Parser) -> eyre::Result<()>;
+
+struct ParseRule {
+    prefix: Option<ParseFunction>,
+    infix: Option<ParseFunction>,
+    precedence: Precedence,
+}
+
+fn get_parse_rule(token_type: &TokenType) -> ParseRule {
+    match token_type {
+        TokenType::LeftParen => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.grouping(p)),
+            infix: None,
+            precedence: Precedence::None,
+        },
+        TokenType::Minus => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.unary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Term,
+        },
+        TokenType::Plus => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Term,
+        },
+        TokenType::Slash => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Factor,
+        },
+        TokenType::Star => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Factor,
+        },
+        TokenType::Number(_) => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.number(p)),
+            infix: None,
+            precedence: Precedence::None,
+        },
+        _ => ParseRule {
+            prefix: None,
+            infix: None,
+            precedence: Precedence::None,
+        },
+    }
+}
 
 struct Compiler {
     chunk: Chunk,
@@ -19,10 +102,11 @@ impl Compiler {
 
         let mut parser = Parser::new(source)?;
 
-        parser.advance()?;
+        self.expression(&mut parser)?;
 
-        self.emit_return(parser.current.line);
         self.consume(&mut parser, TokenType::Eof, "Expect end of expression.")?;
+
+        info!(chunk = %self.chunk, "Compiled chunk");
 
         Ok(std::mem::take(&mut self.chunk))
     }
@@ -36,11 +120,80 @@ impl Compiler {
     }
 
     fn number(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        // parser.previous
+        match &parser.previous.token_type {
+            TokenType::Number(v) => {
+                let number = v.parse::<f64>()?;
+                self.emit_constant(Value::Double(number), parser.previous.line);
+                Ok(())
+            }
+            _ => Err(eyre::eyre!("Unexpected token type generating number")),
+        }
+    }
+
+    fn grouping(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.expression(parser)?;
+        self.consume(parser, TokenType::RightParen, "Expect ')' after expression.")?;
+        Ok(())
+    }
+
+    fn unary(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        let operator_type = parser.previous.token_type.clone();
+
+        self.parse_precedence(parser, Precedence::Unary)?;
+
+        match operator_type {
+            TokenType::Minus => self.chunk.write(Instruction::Negate, parser.previous.line),
+            _ => return Err(eyre::eyre!("Unexpected operator type in unary expression")),
+        }
+
         Ok(())
     }
 
     fn expression(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.parse_precedence(parser, Precedence::Assignment)
+    }
+
+    fn binary(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        let operator_type = parser.previous.token_type.clone();
+
+        let rule = get_parse_rule(&operator_type);
+
+        self.parse_precedence(parser, rule.precedence.one_higher())?;
+
+        match operator_type {
+            TokenType::Plus => self.chunk.write(Instruction::Add, parser.previous.line),
+            TokenType::Minus => self.chunk.write(Instruction::Subtract, parser.previous.line),
+            TokenType::Star => self.chunk.write(Instruction::Multiply, parser.previous.line),
+            TokenType::Slash => self.chunk.write(Instruction::Divide, parser.previous.line),
+            _ => return Err(eyre::eyre!("Unexpected operator type in binary expression")),
+        }
+
+        Ok(())
+    }
+
+    fn parse_precedence(&mut self, parser: &mut Parser, precedence: Precedence) -> eyre::Result<()> {
+        parser.advance()?;
+
+        info!(previous = ?parser.previous.token_type, current = ?parser.current.token_type, "parse_precedence");
+
+        let rule = get_parse_rule(&parser.previous.token_type);
+
+        if let Some(prefix) = &rule.prefix {
+            prefix(self, parser)?;
+        } else {
+            return Err(eyre::eyre!("Expect expression"));
+        }
+
+        while precedence < get_parse_rule(&parser.current.token_type).precedence {
+            parser.advance()?;
+            let rule = get_parse_rule(&parser.previous.token_type);
+            if let Some(infix) = &rule.infix {
+                infix(self, parser)?;
+            } else {
+                return Err(eyre::eyre!("Expect expression"));
+            }
+        }
+
         Ok(())
     }
 
@@ -50,6 +203,25 @@ impl Compiler {
             return Ok(());
         }
 
+        error!(expected = ?token, current = ?parser.current.token_type, "Unable to consume expected type");
         Err(eyre::eyre!(message.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::Compiler;
+
+    #[rstest]
+    #[case("1 + 2")]
+    #[case("(1 + 2)")]
+    #[case("(-1 + 2) * 3 - -4")]
+    fn compile_expected(#[case] input: String) {
+        crate::tracing::configure_tracing(tracing::level_filters::LevelFilter::INFO);
+
+        let mut compiler = Compiler::new();
+        compiler.compile(&input).unwrap();
     }
 }
