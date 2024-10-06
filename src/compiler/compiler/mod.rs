@@ -219,8 +219,6 @@ mod tests {
     #[case("(1 + 2)")]
     #[case("(-1 + 2) * 3 - -4")]
     fn compile_expected(#[case] input: String) {
-        crate::tracing::configure_tracing(tracing::level_filters::LevelFilter::INFO);
-
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
     }
