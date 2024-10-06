@@ -1,5 +1,7 @@
 use tokens::scanner::Scanner;
 
+mod compiler;
+mod parser;
 mod tokens;
 
 pub fn compile(source: &str) -> eyre::Result<()> {
