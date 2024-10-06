@@ -17,6 +17,15 @@ use rusty_lox::{bytecode::Value, compiler::compile, vm::VM};
 #[case("nil", Value::Nil)]
 #[case("!false", Value::Bool(true))]
 #[case("!!false", Value::Bool(false))]
+#[case("1 == 1", Value::Bool(true))]
+#[case("1 != 2", Value::Bool(true))]
+#[case("2 > 1", Value::Bool(true))]
+#[case("2 > 2", Value::Bool(false))]
+#[case("2 >= 2", Value::Bool(true))]
+#[case("2 < 1", Value::Bool(false))]
+#[case("2 < 2", Value::Bool(false))]
+#[case("2 <= 2", Value::Bool(true))]
+#[case("!(5 - 4 > 3 * 2 == !nil)", Value::Bool(true))]
 fn end_to_end(#[case] source: String, #[case] expected: Value) {
     let chunk = compile(&source).unwrap();
     let mut vm = VM::default();

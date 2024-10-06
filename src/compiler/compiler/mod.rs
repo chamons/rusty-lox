@@ -90,6 +90,21 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
             infix: None,
             precedence: Precedence::None,
         },
+        TokenType::BangEqual => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Equality,
+        },
+        TokenType::EqualEqual => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Equality,
+        },
+        TokenType::Greater | TokenType::GreaterEqual | TokenType::Less | TokenType::LessEqual => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            precedence: Precedence::Comparison,
+        },
         _ => ParseRule {
             prefix: None,
             infix: None,
@@ -178,6 +193,21 @@ impl Compiler {
             TokenType::Minus => self.chunk.write(Instruction::Subtract, parser.previous.line),
             TokenType::Star => self.chunk.write(Instruction::Multiply, parser.previous.line),
             TokenType::Slash => self.chunk.write(Instruction::Divide, parser.previous.line),
+            TokenType::BangEqual => {
+                self.chunk.write(Instruction::Equal, parser.previous.line);
+                self.chunk.write(Instruction::Not, parser.previous.line);
+            }
+            TokenType::EqualEqual => self.chunk.write(Instruction::Equal, parser.previous.line),
+            TokenType::Greater => self.chunk.write(Instruction::Greater, parser.previous.line),
+            TokenType::GreaterEqual => {
+                self.chunk.write(Instruction::Less, parser.previous.line);
+                self.chunk.write(Instruction::Not, parser.previous.line);
+            }
+            TokenType::Less => self.chunk.write(Instruction::Less, parser.previous.line),
+            TokenType::LessEqual => {
+                self.chunk.write(Instruction::Greater, parser.previous.line);
+                self.chunk.write(Instruction::Not, parser.previous.line);
+            }
             _ => return Err(eyre::eyre!("Unexpected operator type in binary expression")),
         }
 

@@ -17,6 +17,9 @@ pub enum Instruction {
     Multiply,
     Divide,
     Not,
+    Equal,
+    Greater,
+    Less,
 }
 
 impl Instruction {
@@ -40,11 +43,14 @@ impl Instruction {
             Instruction::Multiply => f.write_str("OP_MULTIPLY"),
             Instruction::Divide => f.write_str("OP_DIVIDE"),
             Instruction::Not => f.write_str("OP_NOT"),
+            Instruction::Equal => f.write_str("OP_EQUAL"),
+            Instruction::Greater => f.write_str("OP_GREATER"),
+            Instruction::Less => f.write_str("OP_LESS"),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Double(f64),
     Bool(bool),
@@ -60,3 +66,16 @@ impl Display for Value {
         }
     }
 }
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Double(l), Value::Double(r)) => l == r,
+            (Value::Bool(l), Value::Bool(r)) => l == r,
+            (Value::Nil, Value::Nil) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Value {}

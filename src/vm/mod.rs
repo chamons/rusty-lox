@@ -25,6 +25,10 @@ impl VM {
         Self::default()
     }
 
+    fn pop(&mut self) -> Result<Value, InterpretErrors> {
+        self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)
+    }
+
     fn pop_double(&mut self) -> Result<f64, InterpretErrors> {
         let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
         match value {
@@ -89,6 +93,21 @@ impl VM {
                 Instruction::Not => {
                     let a = self.pop_falsey()?;
                     self.stack.push(Value::Bool(a));
+                }
+                Instruction::Equal => {
+                    let a = self.pop()?;
+                    let b = self.pop()?;
+                    self.stack.push(Value::Bool(a == b));
+                }
+                Instruction::Greater => {
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.stack.push(Value::Bool(a > b));
+                }
+                Instruction::Less => {
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.stack.push(Value::Bool(a < b));
                 }
             }
         }
