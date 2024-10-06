@@ -98,7 +98,7 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
     }
 }
 
-struct Compiler {
+pub struct Compiler {
     chunk: Chunk,
 }
 
@@ -115,6 +115,8 @@ impl Compiler {
         self.expression(&mut parser)?;
 
         self.consume(&mut parser, TokenType::Eof, "Expect end of expression.")?;
+
+        self.emit_return(parser.current.line);
 
         info!(chunk = %self.chunk, "Compiled chunk");
 
@@ -233,6 +235,8 @@ impl Compiler {
 mod tests {
     use rstest::rstest;
 
+    use crate::bytecode::Instruction;
+
     use super::Compiler;
 
     #[rstest]
@@ -253,5 +257,12 @@ mod tests {
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
+    }
+
+    #[test]
+    fn chunks_end_with_return() {
+        let mut compiler = Compiler::new();
+        let chunk = compiler.compile("1 + 2").unwrap();
+        assert!(matches!(chunk.code().last().unwrap(), Instruction::Return));
     }
 }

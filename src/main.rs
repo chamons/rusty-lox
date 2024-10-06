@@ -1,5 +1,6 @@
 #![allow(dead_code, unreachable_patterns)]
 
+use compiler::compile;
 use eyre::eyre;
 use std::{env::args, fs, io::Write};
 
@@ -28,7 +29,9 @@ fn repl() -> eyre::Result<()> {
             return Ok(());
         }
 
-        if let Err(err) = vm.interpret(&line) {
+        let chunk = compile(&line)?;
+
+        if let Err(err) = vm.interpret(&chunk) {
             eprintln!("{err:?}")
         }
     }
@@ -38,11 +41,13 @@ fn run_file(path: String) -> eyre::Result<()> {
     let mut vm = VM::default();
 
     let source = fs::read_to_string(path)?;
-    Ok(vm.interpret(&source)?)
+    let chunk = compile(&source)?;
+
+    Ok(vm.interpret(&chunk)?)
 }
 
 fn main() -> eyre::Result<()> {
-    tracing::configure_default_tracing();
+    tracing::configure_tracing(::tracing::level_filters::LevelFilter::TRACE);
 
     match args().len() {
         1 => repl(),

@@ -1,13 +1,14 @@
-use tokens::scanner::Scanner;
+use compiler::Compiler;
+
+use crate::bytecode::Chunk;
 
 mod compiler;
 mod parser;
 mod tokens;
 
-pub fn compile(source: &str) -> eyre::Result<()> {
-    let _scanner = Scanner::new(source);
-
-    Ok(())
+pub fn compile(source: &str) -> eyre::Result<Chunk> {
+    let mut compiler = Compiler::new();
+    Ok(compiler.compile(source)?)
 }
 
 #[cfg(test)]

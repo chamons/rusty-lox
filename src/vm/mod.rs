@@ -21,6 +21,10 @@ pub enum InterpretErrors {
 }
 
 impl VM {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     fn pop_double(&mut self) -> Result<f64, InterpretErrors> {
         let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
         match value {
@@ -38,11 +42,7 @@ impl VM {
         })
     }
 
-    pub fn interpret(&mut self, _source: &str) -> Result<(), InterpretErrors> {
-        Ok(())
-    }
-
-    pub fn interpret_chunk(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
+    pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
         for instruction in chunk.code() {
             trace!(?instruction, stack = ?self.stack, "Interpreting");
 
@@ -108,7 +108,7 @@ mod tests {
         chunk.write(Instruction::Return, 123);
 
         let mut vm = VM::default();
-        vm.interpret_chunk(&chunk).unwrap();
+        vm.interpret(&chunk).unwrap();
     }
 
     #[test]
@@ -123,7 +123,7 @@ mod tests {
         chunk.write(Instruction::Return, 125);
 
         let mut vm = VM::default();
-        vm.interpret_chunk(&chunk).unwrap();
+        vm.interpret(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Double(-0.8214285714285714));
     }
 
@@ -136,7 +136,7 @@ mod tests {
         chunk.write(Instruction::Not, 123);
 
         let mut vm = VM::default();
-        assert!(vm.interpret_chunk(&chunk).is_err());
+        assert!(vm.interpret(&chunk).is_err());
         assert_eq!(vm.stack[0], Value::Bool(!input));
     }
 
@@ -147,7 +147,7 @@ mod tests {
         chunk.write(Instruction::Not, 123);
 
         let mut vm = VM::default();
-        assert!(vm.interpret_chunk(&chunk).is_err());
+        assert!(vm.interpret(&chunk).is_err());
         assert_eq!(vm.stack[0], Value::Bool(true));
     }
 
@@ -159,7 +159,7 @@ mod tests {
         chunk.write(Instruction::Add, 123);
 
         let mut vm = VM::default();
-        assert!(vm.interpret_chunk(&chunk).is_err());
+        assert!(vm.interpret(&chunk).is_err());
     }
 
     #[test]
