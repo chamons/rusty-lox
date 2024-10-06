@@ -80,6 +80,16 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
             infix: None,
             precedence: Precedence::None,
         },
+        TokenType::False | TokenType::True | TokenType::Nil => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.literal(p)),
+            infix: None,
+            precedence: Precedence::None,
+        },
+        TokenType::Bang => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.unary(p)),
+            infix: None,
+            precedence: Precedence::None,
+        },
         _ => ParseRule {
             prefix: None,
             infix: None,
@@ -143,6 +153,7 @@ impl Compiler {
 
         match operator_type {
             TokenType::Minus => self.chunk.write(Instruction::Negate, parser.previous.line),
+            TokenType::Bang => self.chunk.write(Instruction::Not, parser.previous.line),
             _ => return Err(eyre::eyre!("Unexpected operator type in unary expression")),
         }
 
@@ -168,6 +179,16 @@ impl Compiler {
             _ => return Err(eyre::eyre!("Unexpected operator type in binary expression")),
         }
 
+        Ok(())
+    }
+
+    fn literal(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        match parser.previous.token_type {
+            TokenType::False => self.chunk.write_constant(Value::Bool(false), parser.previous.line),
+            TokenType::True => self.chunk.write_constant(Value::Bool(true), parser.previous.line),
+            TokenType::Nil => self.chunk.write_constant(Value::Nil, parser.previous.line),
+            _ => return Err(eyre::eyre!("Unexpected type in literal expression")),
+        }
         Ok(())
     }
 
@@ -218,7 +239,18 @@ mod tests {
     #[case("1 + 2")]
     #[case("(1 + 2)")]
     #[case("(-1 + 2) * 3 - -4")]
+    #[case("true")]
+    #[case("false")]
+    #[case("nil")]
+    #[case("!false")]
     fn compile_expected(#[case] input: String) {
+        let mut compiler = Compiler::new();
+        compiler.compile(&input).unwrap();
+    }
+
+    #[rstest]
+    #[case("-false")]
+    fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
     }

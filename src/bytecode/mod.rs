@@ -16,6 +16,7 @@ pub enum Instruction {
     Subtract,
     Multiply,
     Divide,
+    Not,
 }
 
 impl Instruction {
@@ -38,6 +39,7 @@ impl Instruction {
             Instruction::Subtract => f.write_str("OP_SUBTRACT"),
             Instruction::Multiply => f.write_str("OP_MULTIPLY"),
             Instruction::Divide => f.write_str("OP_DIVIDE"),
+            Instruction::Not => f.write_str("OP_NOT"),
         }
     }
 }
@@ -45,12 +47,16 @@ impl Instruction {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     Double(f64),
+    Bool(bool),
+    Nil,
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Double(v) => f.write_fmt(format_args!("{v}")),
+            Value::Bool(v) => f.write_fmt(format_args!("{v}")),
+            Value::Nil => f.write_fmt(format_args!("nil")),
         }
     }
 }

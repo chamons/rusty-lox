@@ -1,7 +1,7 @@
 use thiserror::Error;
 use tracing::{debug, trace};
 
-use crate::bytecode::{Chunk, Value};
+use crate::bytecode::{Chunk, Instruction, Value};
 
 #[derive(Debug, Default)]
 pub struct VM {
@@ -29,6 +29,15 @@ impl VM {
         }
     }
 
+    fn pop_falsey(&mut self) -> Result<bool, InterpretErrors> {
+        let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
+        Ok(match value {
+            Value::Double(_) => false,
+            Value::Bool(v) => !v,
+            Value::Nil => true,
+        })
+    }
+
     pub fn interpret(&mut self, _source: &str) -> Result<(), InterpretErrors> {
         Ok(())
     }
@@ -38,40 +47,44 @@ impl VM {
             trace!(?instruction, stack = ?self.stack, "Interpreting");
 
             match instruction {
-                crate::bytecode::Instruction::Return => return Ok(()),
-                crate::bytecode::Instruction::Constant { index } => {
+                Instruction::Return => return Ok(()),
+                Instruction::Constant { index } => {
                     let constant = chunk.constant(*index as usize);
                     self.stack.push(constant.clone());
                     debug!(value = %constant, "Interpreted constant");
                 }
-                crate::bytecode::Instruction::LongConstant { index } => {
+                Instruction::LongConstant { index } => {
                     let constant = chunk.constant(*index as usize);
                     self.stack.push(constant.clone());
                     debug!(value = %constant, "Interpreted constant");
                 }
-                crate::bytecode::Instruction::Negate => {
+                Instruction::Negate => {
                     let v = self.pop_double()?;
                     self.stack.push(Value::Double(-v));
                 }
-                crate::bytecode::Instruction::Add => {
+                Instruction::Add => {
                     let b = self.pop_double()?;
                     let a = self.pop_double()?;
                     self.stack.push(Value::Double(a + b));
                 }
-                crate::bytecode::Instruction::Subtract => {
+                Instruction::Subtract => {
                     let b = self.pop_double()?;
                     let a = self.pop_double()?;
                     self.stack.push(Value::Double(a - b));
                 }
-                crate::bytecode::Instruction::Multiply => {
+                Instruction::Multiply => {
                     let b = self.pop_double()?;
                     let a = self.pop_double()?;
                     self.stack.push(Value::Double(a * b));
                 }
-                crate::bytecode::Instruction::Divide => {
+                Instruction::Divide => {
                     let b = self.pop_double()?;
                     let a = self.pop_double()?;
                     self.stack.push(Value::Double(a / b));
+                }
+                Instruction::Not => {
+                    let a = self.pop_falsey()?;
+                    self.stack.push(Value::Bool(a));
                 }
             }
         }
@@ -82,6 +95,8 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use crate::bytecode::{Chunk, Instruction, Value};
 
     use super::VM;
@@ -110,5 +125,63 @@ mod tests {
         let mut vm = VM::default();
         vm.interpret_chunk(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Double(-0.8214285714285714));
+    }
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    fn negate_boolean(#[case] input: bool) {
+        let mut chunk = Chunk::new();
+        chunk.write_constant(Value::Bool(input), 123);
+        chunk.write(Instruction::Not, 123);
+
+        let mut vm = VM::default();
+        assert!(vm.interpret_chunk(&chunk).is_err());
+        assert_eq!(vm.stack[0], Value::Bool(!input));
+    }
+
+    #[test]
+    fn negate_nil() {
+        let mut chunk = Chunk::new();
+        chunk.write_constant(Value::Nil, 123);
+        chunk.write(Instruction::Not, 123);
+
+        let mut vm = VM::default();
+        assert!(vm.interpret_chunk(&chunk).is_err());
+        assert_eq!(vm.stack[0], Value::Bool(true));
+    }
+
+    #[test]
+    fn add_wrong_types() {
+        let mut chunk = Chunk::new();
+        chunk.write_constant(Value::Bool(true), 123);
+        chunk.write_constant(Value::Double(1.2), 123);
+        chunk.write(Instruction::Add, 123);
+
+        let mut vm = VM::default();
+        assert!(vm.interpret_chunk(&chunk).is_err());
+    }
+
+    #[test]
+    fn new_constants() {
+        let mut chunk = Chunk::new();
+        chunk.write_constant(Value::Bool(true), 123);
+        chunk.write_constant(Value::Nil, 123);
+        chunk.write(Instruction::Return, 123);
+    }
+
+    #[test]
+    fn falsey() {
+        let mut vm = VM::default();
+        vm.stack.push(Value::Double(1.2));
+        vm.stack.push(Value::Double(0.0));
+        vm.stack.push(Value::Nil);
+        vm.stack.push(Value::Bool(true));
+        vm.stack.push(Value::Bool(false));
+        assert!(vm.pop_falsey().unwrap());
+        assert!(!vm.pop_falsey().unwrap());
+        assert!(vm.pop_falsey().unwrap());
+        assert!(!vm.pop_falsey().unwrap());
+        assert!(!vm.pop_falsey().unwrap());
     }
 }
