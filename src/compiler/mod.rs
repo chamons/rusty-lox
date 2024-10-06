@@ -1,8 +1,6 @@
-use scanner::Scanner;
+use parser::scanner::Scanner;
 
-mod scanner;
-mod source;
-mod token;
+mod parser;
 
 pub fn compile(source: &str) -> eyre::Result<()> {
     let _scanner = Scanner::new(source);
