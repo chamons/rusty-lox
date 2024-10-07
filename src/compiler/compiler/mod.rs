@@ -132,11 +132,9 @@ impl Compiler {
 
         let mut parser = Parser::new(source)?;
 
-        self.expression(&mut parser)?;
-
-        self.consume(&mut parser, TokenType::Eof, "Expect end of expression.")?;
-
-        self.emit_return(parser.current.line);
+        while !self.match_token(&mut parser, TokenType::Eof)? {
+            self.expression(&mut parser)?;
+        }
 
         info!(chunk = %self.chunk, "Compiled chunk");
 
@@ -276,13 +274,20 @@ impl Compiler {
         error!(expected = ?token, current = ?parser.current.token_type, "Unable to consume expected type");
         Err(eyre::eyre!(message.to_string()))
     }
+
+    fn match_token(&mut self, parser: &mut Parser, token: TokenType) -> eyre::Result<bool> {
+        if parser.current.token_type == token {
+            parser.advance()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-
-    use crate::bytecode::Instruction;
 
     use super::Compiler;
 
@@ -304,12 +309,5 @@ mod tests {
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
-    }
-
-    #[test]
-    fn chunks_end_with_return() {
-        let mut compiler = Compiler::new();
-        let chunk = compiler.compile("1 + 2").unwrap();
-        assert!(matches!(chunk.code().last().unwrap(), Instruction::Return));
     }
 }

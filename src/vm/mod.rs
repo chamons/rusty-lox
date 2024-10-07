@@ -120,7 +120,7 @@ impl VM {
             }
         }
 
-        Err(InterpretErrors::ReachedEndOfChunk)
+        Ok(())
     }
 }
 
@@ -167,7 +167,7 @@ mod tests {
         chunk.write(Instruction::Not, 123);
 
         let mut vm = VM::default();
-        assert!(vm.interpret(&chunk).is_err());
+        vm.interpret(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Bool(!input));
     }
 
@@ -178,7 +178,7 @@ mod tests {
         chunk.write(Instruction::Not, 123);
 
         let mut vm = VM::default();
-        assert!(vm.interpret(&chunk).is_err());
+        vm.interpret(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Bool(true));
     }
 
