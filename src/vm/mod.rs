@@ -40,7 +40,7 @@ impl VM {
     fn pop_falsey(&mut self) -> Result<bool, InterpretErrors> {
         let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
         Ok(match value {
-            Value::Double(_) => false,
+            Value::Double(_) | Value::String(_) => false,
             Value::Bool(v) => !v,
             Value::Nil => true,
         })
@@ -71,9 +71,17 @@ impl VM {
                     self.stack.push(Value::Double(-v));
                 }
                 Instruction::Add => {
-                    let b = self.pop_double()?;
-                    let a = self.pop_double()?;
-                    self.stack.push(Value::Double(a + b));
+                    let b = self.pop()?;
+                    let a = self.pop()?;
+                    match (a, b) {
+                        (Value::Double(a), Value::Double(b)) => {
+                            self.stack.push(Value::Double(a + b));
+                        }
+                        (Value::String(a), Value::String(b)) => {
+                            self.stack.push(Value::String(a + &b));
+                        }
+                        _ => return Err(InterpretErrors::InvalidRuntimeType),
+                    }
                 }
                 Instruction::Subtract => {
                     let b = self.pop_double()?;

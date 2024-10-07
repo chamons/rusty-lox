@@ -55,6 +55,7 @@ pub enum Value {
     Double(f64),
     Bool(bool),
     Nil,
+    String(String),
 }
 
 impl Display for Value {
@@ -63,6 +64,7 @@ impl Display for Value {
             Value::Double(v) => f.write_fmt(format_args!("{v}")),
             Value::Bool(v) => f.write_fmt(format_args!("{v}")),
             Value::Nil => f.write_fmt(format_args!("nil")),
+            Value::String(v) => f.write_fmt(format_args!("{v}")),
         }
     }
 }
@@ -72,6 +74,7 @@ impl PartialEq for Value {
         match (self, other) {
             (Value::Double(l), Value::Double(r)) => l == r,
             (Value::Bool(l), Value::Bool(r)) => l == r,
+            (Value::String(l), Value::String(r)) => l == r,
             (Value::Nil, Value::Nil) => true,
             _ => false,
         }

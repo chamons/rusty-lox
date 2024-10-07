@@ -105,6 +105,11 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
             infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
             precedence: Precedence::Comparison,
         },
+        TokenType::String(_) => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.string(p)),
+            infix: None,
+            precedence: Precedence::None,
+        },
         _ => ParseRule {
             prefix: None,
             infix: None,
@@ -154,6 +159,16 @@ impl Compiler {
                 Ok(())
             }
             _ => Err(eyre::eyre!("Unexpected token type generating number")),
+        }
+    }
+
+    fn string(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        match &parser.previous.token_type {
+            TokenType::String(v) => {
+                self.emit_constant(Value::String(v.clone()), parser.previous.line);
+                Ok(())
+            }
+            _ => Err(eyre::eyre!("Unexpected token type generating string")),
         }
     }
 
