@@ -24,7 +24,13 @@ fn repl() -> eyre::Result<()> {
             return Ok(());
         }
 
-        let chunk = compile(&line)?;
+        let chunk = match compile(&line) {
+            Ok(chunk) => chunk,
+            Err(err) => {
+                eprintln!("{err:?}");
+                continue;
+            }
+        };
 
         if let Err(err) = vm.interpret(&chunk) {
             eprintln!("{err:?}")
