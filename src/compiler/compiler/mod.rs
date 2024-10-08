@@ -1,3 +1,8 @@
+use std::{
+    error::Error,
+    fmt::{Display, Write},
+};
+
 use tracing::{error, info};
 
 use crate::{
@@ -118,6 +123,37 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct CompileErrors {
+    errors: Vec<eyre::Report>,
+}
+
+impl CompileErrors {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn has_any(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    pub fn push(&mut self, err: eyre::Report) {
+        self.errors.push(err);
+    }
+}
+
+impl Error for CompileErrors {}
+
+impl Display for CompileErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for error in &self.errors {
+            error.fmt(f)?;
+            f.write_char('\n')?;
+        }
+        Ok(())
+    }
+}
+
 pub struct Compiler {
     chunk: Chunk,
 }
@@ -131,14 +167,51 @@ impl Compiler {
         self.chunk = Chunk::new();
 
         let mut parser = Parser::new(source)?;
+        let mut errors = CompileErrors::new();
 
         while !self.match_token(&mut parser, TokenType::Eof)? {
-            self.expression(&mut parser)?;
+            if let Err(err) = self.try_compile(&mut parser) {
+                println!("Processing error");
+                errors.push(err);
+                self.synchronize(&mut parser)?;
+            }
         }
 
-        info!(chunk = %self.chunk, "Compiled chunk");
+        if errors.has_any() {
+            info!(errors = %errors, "Error compiling chunk");
+            Err(errors.into())
+        } else {
+            info!(chunk = %self.chunk, "Compiled chunk");
+            Ok(std::mem::take(&mut self.chunk))
+        }
+    }
 
-        Ok(std::mem::take(&mut self.chunk))
+    fn synchronize(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        while parser.current.token_type != TokenType::Eof {
+            if parser.previous.token_type == TokenType::Semicolon {
+                return Ok(());
+            }
+            match parser.current.token_type {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => {
+                    return Ok(());
+                }
+                _ => {}
+            }
+            parser.advance()?;
+        }
+        Ok(())
+    }
+
+    fn try_compile(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.declaration(parser)?;
+        Ok(())
     }
 
     fn emit_return(&mut self, line: u32) {
@@ -187,6 +260,33 @@ impl Compiler {
             _ => return Err(eyre::eyre!("Unexpected operator type in unary expression")),
         }
 
+        Ok(())
+    }
+
+    fn declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.statement(parser)
+    }
+
+    fn statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        if self.match_token(parser, TokenType::Print)? {
+            self.print_statement(parser)?;
+        } else {
+            self.expression_statement(parser)?;
+        }
+        Ok(())
+    }
+
+    fn print_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.expression(parser)?;
+        self.consume(parser, TokenType::Semicolon, "Expect ';' after value.")?;
+        self.chunk.write(Instruction::Print, parser.previous.line);
+        Ok(())
+    }
+
+    fn expression_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.expression(parser)?;
+        self.consume(parser, TokenType::Semicolon, "Expect ';' after expression.")?;
+        self.chunk.write(Instruction::Pop, parser.previous.line);
         Ok(())
     }
 
@@ -292,20 +392,20 @@ mod tests {
     use super::Compiler;
 
     #[rstest]
-    #[case("1 + 2")]
-    #[case("(1 + 2)")]
-    #[case("(-1 + 2) * 3 - -4")]
-    #[case("true")]
-    #[case("false")]
-    #[case("nil")]
-    #[case("!false")]
+    #[case("1 + 2;")]
+    #[case("(1 + 2);")]
+    #[case("(-1 + 2) * 3 - -4;")]
+    #[case("true;")]
+    #[case("false;")]
+    #[case("nil;")]
+    #[case("!false;")]
     fn compile_expected(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
     }
 
     #[rstest]
-    #[case("-false")]
+    #[case("-false;")]
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();

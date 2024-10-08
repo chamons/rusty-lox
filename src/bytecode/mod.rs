@@ -20,6 +20,8 @@ pub enum Instruction {
     Equal,
     Greater,
     Less,
+    Print,
+    Pop,
 }
 
 impl Instruction {
@@ -46,6 +48,8 @@ impl Instruction {
             Instruction::Equal => f.write_str("OP_EQUAL"),
             Instruction::Greater => f.write_str("OP_GREATER"),
             Instruction::Less => f.write_str("OP_LESS"),
+            Instruction::Print => f.write_str("OP_PRINT"),
+            Instruction::Pop => f.write_str("OP_POP"),
         }
     }
 }

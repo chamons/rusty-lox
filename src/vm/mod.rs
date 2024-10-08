@@ -4,8 +4,18 @@ use tracing::{debug, trace};
 use crate::bytecode::{Chunk, Instruction, Value};
 
 #[derive(Debug, Default)]
+pub struct VMSettings {
+    pub capture_prints: bool,
+}
+
+#[derive(Debug)]
 pub struct VM {
     stack: Vec<Value>,
+    settings: VMSettings,
+
+    // If capture_prints is set then do not print to stdout
+    // store here (for integration testing and such)
+    pub captured_prints: Vec<String>,
 }
 
 #[derive(Error, Debug)]
@@ -22,7 +32,15 @@ pub enum InterpretErrors {
 
 impl VM {
     pub fn new() -> Self {
-        Self::default()
+        Self::new_from_settings(VMSettings::default())
+    }
+
+    pub fn new_from_settings(settings: VMSettings) -> Self {
+        VM {
+            stack: vec![],
+            settings,
+            captured_prints: vec![],
+        }
     }
 
     fn pop(&mut self) -> Result<Value, InterpretErrors> {
@@ -46,16 +64,12 @@ impl VM {
         })
     }
 
-    pub fn stack_top(&self) -> Option<&Value> {
-        self.stack.first()
-    }
-
     pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
         for instruction in chunk.code() {
             trace!(?instruction, stack = ?self.stack, "Interpreting");
 
             match instruction {
-                Instruction::Return => return Ok(()),
+                Instruction::Return => {}
                 Instruction::Constant { index } => {
                     let constant = chunk.constant(*index as usize);
                     self.stack.push(constant.clone());
@@ -117,6 +131,17 @@ impl VM {
                     let a = self.pop_double()?;
                     self.stack.push(Value::Bool(a < b));
                 }
+                Instruction::Print => {
+                    let a = self.pop()?;
+                    if self.settings.capture_prints {
+                        self.captured_prints.push(format!("{a}"));
+                    } else {
+                        println!("{a}");
+                    }
+                }
+                Instruction::Pop => {
+                    let _ = self.pop()?;
+                }
             }
         }
 
@@ -138,7 +163,7 @@ mod tests {
         chunk.write_constant(Value::Double(1.2), 123);
         chunk.write(Instruction::Return, 123);
 
-        let mut vm = VM::default();
+        let mut vm = VM::new();
         vm.interpret(&chunk).unwrap();
     }
 
@@ -153,7 +178,7 @@ mod tests {
         chunk.write(Instruction::Negate, 123);
         chunk.write(Instruction::Return, 125);
 
-        let mut vm = VM::default();
+        let mut vm = VM::new();
         vm.interpret(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Double(-0.8214285714285714));
     }
@@ -166,7 +191,7 @@ mod tests {
         chunk.write_constant(Value::Bool(input), 123);
         chunk.write(Instruction::Not, 123);
 
-        let mut vm = VM::default();
+        let mut vm = VM::new();
         vm.interpret(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Bool(!input));
     }
@@ -177,7 +202,7 @@ mod tests {
         chunk.write_constant(Value::Nil, 123);
         chunk.write(Instruction::Not, 123);
 
-        let mut vm = VM::default();
+        let mut vm = VM::new();
         vm.interpret(&chunk).unwrap();
         assert_eq!(vm.stack[0], Value::Bool(true));
     }
@@ -189,7 +214,7 @@ mod tests {
         chunk.write_constant(Value::Double(1.2), 123);
         chunk.write(Instruction::Add, 123);
 
-        let mut vm = VM::default();
+        let mut vm = VM::new();
         assert!(vm.interpret(&chunk).is_err());
     }
 
@@ -203,7 +228,7 @@ mod tests {
 
     #[test]
     fn falsey() {
-        let mut vm = VM::default();
+        let mut vm = VM::new();
         vm.stack.push(Value::Double(1.2));
         vm.stack.push(Value::Double(0.0));
         vm.stack.push(Value::Nil);

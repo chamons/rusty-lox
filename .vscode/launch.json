@@ -19,7 +19,9 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "data/errors.lox"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {

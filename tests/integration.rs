@@ -1,40 +1,44 @@
 use rstest::rstest;
-use rusty_lox::{bytecode::Value, compiler::compile, vm::VM};
+use rusty_lox::{
+    compiler::compile,
+    vm::{VMSettings, VM},
+};
 
 #[rstest]
-#[case("1 + 2", Value::Double(3.0))]
-#[case("(1 + 2)", Value::Double(3.0))]
-#[case("-1", Value::Double(-1.0))]
-#[case("(-1 + 2) * 3 - -4", Value::Double(7.0))]
-#[case("2 * 3 + 4", Value::Double(10.0))]
-#[case("2 + 3 * 4", Value::Double(14.0))]
-#[case("(2 + 3) * 4", Value::Double(20.0))]
-#[case("2 + 4 / 4", Value::Double(3.0))]
-#[case("2 + 2 + 3 * 4", Value::Double(16.0))]
-#[case("2 + 2 - 3 * 4", Value::Double(-8.0))]
-#[case("true", Value::Bool(true))]
-#[case("false", Value::Bool(false))]
-#[case("nil", Value::Nil)]
-#[case("!false", Value::Bool(true))]
-#[case("!!false", Value::Bool(false))]
-#[case("1 == 1", Value::Bool(true))]
-#[case("1 != 2", Value::Bool(true))]
-#[case("2 > 1", Value::Bool(true))]
-#[case("2 > 2", Value::Bool(false))]
-#[case("2 >= 2", Value::Bool(true))]
-#[case("2 < 1", Value::Bool(false))]
-#[case("2 < 2", Value::Bool(false))]
-#[case("2 <= 2", Value::Bool(true))]
-#[case("!(5 - 4 > 3 * 2 == !nil)", Value::Bool(true))]
-#[case("\"x\"", Value::String("x".to_string()))]
-#[case("\"x\" == \"x\"", Value::Bool(true))]
-#[case("\"x\" == \"y\"", Value::Bool(false))]
-#[case("\"x\" != \"y\"", Value::Bool(true))]
-#[case("\"x\" + \"y\" == \"xy\"", Value::Bool(true))]
-fn end_to_end(#[case] source: String, #[case] expected: Value) {
-    let chunk = compile(&source).unwrap();
-    let mut vm = VM::default();
+#[case("1 + 2", "3")]
+#[case("(1 + 2)", "3")]
+#[case("-1", "-1")]
+#[case("(-1 + 2) * 3 - -4", "7")]
+#[case("2 * 3 + 4", "10")]
+#[case("2 + 3 * 4", "14")]
+#[case("(2 + 3) * 4", "20")]
+#[case("2 + 4 / 4", "3")]
+#[case("2 + 2 + 3 * 4", "16")]
+#[case("2 + 2 - 3 * 4", "-8")]
+#[case("true", "true")]
+#[case("false", "false")]
+#[case("nil", "nil")]
+#[case("!false", "true")]
+#[case("!!false", "false")]
+#[case("1 == 1", "true")]
+#[case("1 != 2", "true")]
+#[case("2 > 1", "true")]
+#[case("2 > 2", "false")]
+#[case("2 >= 2", "true")]
+#[case("2 < 1", "false")]
+#[case("2 < 2", "false")]
+#[case("2 <= 2", "true")]
+#[case("!(5 - 4 > 3 * 2 == !nil)", "true")]
+#[case("\"x\"", "x")]
+#[case("\"x\" == \"x\"", "true")]
+#[case("\"x\" == \"y\"", "false")]
+#[case("\"x\" != \"y\"", "true")]
+#[case("\"x\" + \"y\" == \"xy\"", "true")]
+fn end_to_end(#[case] source: String, #[case] expected: String) {
+    let chunk = compile(&format!("print {source};")).unwrap();
+    let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
     vm.interpret(&chunk).unwrap();
-    assert_eq!(expected, vm.stack_top().unwrap().clone());
+
+    assert_eq!(expected, vm.captured_prints[0]);
 }

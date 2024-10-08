@@ -4,11 +4,11 @@ use eyre::eyre;
 use std::{env::args, fs, io::Write};
 
 use rusty_lox::compiler::compile;
-use rusty_lox::tracing::configure_tracing;
+use rusty_lox::tracing::configure_default_tracing;
 use rusty_lox::vm::VM;
 
 fn repl() -> eyre::Result<()> {
-    let mut vm = VM::default();
+    let mut vm = VM::new();
 
     println!("Type exit to quit");
     println!();
@@ -39,7 +39,7 @@ fn repl() -> eyre::Result<()> {
 }
 
 fn run_file(path: String) -> eyre::Result<()> {
-    let mut vm = VM::default();
+    let mut vm = VM::new();
 
     let source = fs::read_to_string(path)?;
     let chunk = compile(&source)?;
@@ -48,7 +48,7 @@ fn run_file(path: String) -> eyre::Result<()> {
 }
 
 fn main() -> eyre::Result<()> {
-    configure_tracing(::tracing::level_filters::LevelFilter::TRACE);
+    configure_default_tracing();
 
     match args().len() {
         1 => repl(),
