@@ -19,11 +19,15 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn write_constant(&mut self, value: Value, line: u32) {
+    pub fn make_constant(&mut self, value: Value) -> u32 {
         self.constants.push(value);
-        let index = self.constants.len() - 1;
+        (self.constants.len() - 1) as u32
+    }
 
-        if index > u8::MAX as usize {
+    pub fn write_constant(&mut self, value: Value, line: u32) {
+        let index = self.make_constant(value);
+
+        if index > u8::MAX as u32 {
             self.write(Instruction::LongConstant { index: index as u32 }, line);
         } else {
             self.write(Instruction::Constant { index: index as u8 }, line);
@@ -64,18 +68,28 @@ mod tests {
     fn disassemble_chunk() {
         let mut chunk = Chunk::new();
         chunk.write(Instruction::Constant { index: 0 }, 123);
-        chunk.write(Instruction::LongConstant { index: 1 }, 1230);
-        chunk.write(Instruction::Return, 123);
+        chunk.write(Instruction::LongConstant { index: 1 }, 124);
         chunk.constants.push(Value::Double(1.2));
         chunk.constants.push(Value::Double(12.2));
+
+        let name_index = chunk.make_constant(Value::String("asdf".to_string()));
+        chunk.write(Instruction::Add, 125);
+        chunk.write_constant(Value::Double(1.0), 125);
+        chunk.write_constant(Value::Double(3.0), 125);
+        chunk.write(Instruction::DefineGlobal { name_index }, 125);
+        chunk.write(Instruction::Return, 126);
 
         let output = chunk.to_string();
         // println!("{output}");
 
         const EXPECTED: &str = "
    0  123 OP_CONSTANT 0 '1.2'
-   1 1230 OP_LONG_CONSTANT 1 '12.2'
-   2  123 OP_RETURN
+   1  124 OP_LONG_CONSTANT 1 '12.2'
+   2  125 OP_ADD
+   3    | OP_CONSTANT 3 '1'
+   4    | OP_CONSTANT 4 '3'
+   5    | OP_DEFINE_GLOBAL (asdf)
+   6  126 OP_RETURN
 ";
         assert_eq!(output, EXPECTED);
     }

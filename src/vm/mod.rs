@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use thiserror::Error;
 use tracing::{debug, trace};
 
@@ -12,6 +14,7 @@ pub struct VMSettings {
 pub struct VM {
     stack: Vec<Value>,
     settings: VMSettings,
+    globals: HashMap<String, Value>,
 
     // If capture_prints is set then do not print to stdout
     // store here (for integration testing and such)
@@ -38,6 +41,7 @@ impl VM {
     pub fn new_from_settings(settings: VMSettings) -> Self {
         VM {
             stack: vec![],
+            globals: HashMap::new(),
             settings,
             captured_prints: vec![],
         }
@@ -142,6 +146,16 @@ impl VM {
                 Instruction::Pop => {
                     let _ = self.pop()?;
                 }
+                Instruction::DefineGlobal { name_index } => {
+                    let name = match chunk.constant(*name_index as usize) {
+                        Value::String(name) => name.clone(),
+                        _ => {
+                            return Err(InterpretErrors::InvalidRuntimeType);
+                        }
+                    };
+                    let value = self.pop()?;
+                    self.globals.insert(name, value);
+                }
             }
         }
 
@@ -239,5 +253,18 @@ mod tests {
         assert!(vm.pop_falsey().unwrap());
         assert!(!vm.pop_falsey().unwrap());
         assert!(!vm.pop_falsey().unwrap());
+    }
+
+    #[test]
+    fn globals() {
+        let mut chunk = Chunk::new();
+
+        let name_index = chunk.make_constant(Value::String("asdf".to_string()));
+        chunk.write(Instruction::DefineGlobal { name_index }, 123);
+
+        let mut vm = VM::new();
+        vm.stack.push(Value::Double(42.0));
+        vm.interpret(&chunk).unwrap();
+        assert_eq!(vm.globals["asdf"], Value::Double(42.0));
     }
 }

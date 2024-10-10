@@ -264,7 +264,37 @@ impl Compiler {
     }
 
     fn declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        self.statement(parser)
+        if self.match_token(parser, TokenType::Var)? {
+            self.variable_declaration(parser)
+        } else {
+            self.statement(parser)
+        }
+    }
+
+    fn variable_declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        let global = self.parse_variable(parser)?;
+
+        if self.match_token(parser, TokenType::Equal)? {
+            self.expression(parser)?;
+        } else {
+            self.chunk.write_constant(Value::Nil, parser.previous.line);
+        }
+
+        self.consume(parser, TokenType::Semicolon, "Expect ';' after variable declaration.")?;
+
+        self.chunk.write(Instruction::DefineGlobal { name_index: global }, parser.previous.line);
+
+        Ok(())
+    }
+
+    fn parse_variable(&mut self, parser: &mut Parser) -> eyre::Result<u32> {
+        match parser.current.token_type.clone() {
+            TokenType::Identifier(identifier) => {
+                parser.advance()?;
+                Ok(self.chunk.make_constant(Value::String(identifier)))
+            }
+            _ => Err(eyre::eyre!("Expect identifier")),
+        }
     }
 
     fn statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
@@ -399,6 +429,7 @@ mod tests {
     #[case("false;")]
     #[case("nil;")]
     #[case("!false;")]
+    #[case("var x = 42;")]
     fn compile_expected(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
