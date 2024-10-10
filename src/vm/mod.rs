@@ -31,6 +31,9 @@ pub enum InterpretErrors {
 
     #[error("Invalid runtime type found")]
     InvalidRuntimeType,
+
+    #[error("Undefined variable: {0}")]
+    UndefinedVariable(String),
 }
 
 impl VM {
@@ -66,6 +69,13 @@ impl VM {
             Value::Bool(v) => !v,
             Value::Nil => true,
         })
+    }
+
+    fn fetch_constant_name(&mut self, chunk: &Chunk, index: usize) -> Result<String, InterpretErrors> {
+        match chunk.constant(index) {
+            Value::String(name) => Ok(name.clone()),
+            _ => Err(InterpretErrors::InvalidRuntimeType),
+        }
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
@@ -147,14 +157,18 @@ impl VM {
                     let _ = self.pop()?;
                 }
                 Instruction::DefineGlobal { name_index } => {
-                    let name = match chunk.constant(*name_index as usize) {
-                        Value::String(name) => name.clone(),
-                        _ => {
-                            return Err(InterpretErrors::InvalidRuntimeType);
-                        }
-                    };
+                    let name = self.fetch_constant_name(chunk, *name_index as usize)?;
                     let value = self.pop()?;
                     self.globals.insert(name, value);
+                }
+                Instruction::FetchGlobal { name_index } => {
+                    let name = self.fetch_constant_name(chunk, *name_index as usize)?;
+                    match self.globals.get(&name) {
+                        Some(value) => {
+                            self.stack.push(value.clone());
+                        }
+                        None => return Err(InterpretErrors::UndefinedVariable(name)),
+                    }
                 }
             }
         }
@@ -256,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn globals() {
+    fn globals_write() {
         let mut chunk = Chunk::new();
 
         let name_index = chunk.make_constant(Value::String("asdf".to_string()));
@@ -266,5 +280,18 @@ mod tests {
         vm.stack.push(Value::Double(42.0));
         vm.interpret(&chunk).unwrap();
         assert_eq!(vm.globals["asdf"], Value::Double(42.0));
+    }
+
+    #[test]
+    fn globals_read() {
+        let mut chunk = Chunk::new();
+
+        let name_index = chunk.make_constant(Value::String("asdf".to_string()));
+        chunk.write(Instruction::FetchGlobal { name_index }, 123);
+
+        let mut vm = VM::new();
+        vm.globals.insert("asdf".to_string(), Value::Double(42.0));
+        vm.interpret(&chunk).unwrap();
+        assert_eq!(vm.pop().unwrap(), Value::Double(42.0));
     }
 }

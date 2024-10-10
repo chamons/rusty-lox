@@ -115,6 +115,11 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
             infix: None,
             precedence: Precedence::None,
         },
+        TokenType::Identifier(_) => ParseRule {
+            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.variable(p)),
+            infix: None,
+            precedence: Precedence::None,
+        },
         _ => ParseRule {
             prefix: None,
             infix: None,
@@ -230,6 +235,21 @@ impl Compiler {
                 Ok(())
             }
             _ => Err(eyre::eyre!("Unexpected token type generating number")),
+        }
+    }
+
+    fn variable(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.named_variable(parser)
+    }
+
+    fn named_variable(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        match &parser.previous.token_type {
+            TokenType::Identifier(name) => {
+                let name_index = self.chunk.make_constant(Value::String(name.clone()));
+                self.chunk.write(Instruction::FetchGlobal { name_index }, parser.previous.line);
+                Ok(())
+            }
+            _ => Err(eyre::eyre!("Unexpected token type generating named variable")),
         }
     }
 

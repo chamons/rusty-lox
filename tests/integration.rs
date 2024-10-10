@@ -34,8 +34,25 @@ use rusty_lox::{
 #[case("\"x\" == \"y\"", "false")]
 #[case("\"x\" != \"y\"", "true")]
 #[case("\"x\" + \"y\" == \"xy\"", "true")]
+#[case("\"x\" + \"y\" == \"xy\"", "true")]
 fn end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&format!("print {source};")).unwrap();
+    let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+
+    vm.interpret(&chunk).unwrap();
+
+    assert_eq!(expected, vm.captured_prints[0]);
+}
+
+#[rstest]
+#[case(
+    "var beverage = \"cafe au lait\";
+var breakfast = \"beignets with \" + beverage;
+print breakfast;",
+    "beignets with cafe au lait"
+)]
+fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
+    let chunk = compile(&source).unwrap();
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
     vm.interpret(&chunk).unwrap();

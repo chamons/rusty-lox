@@ -23,6 +23,7 @@ pub enum Instruction {
     Print,
     Pop,
     DefineGlobal { name_index: u32 },
+    FetchGlobal { name_index: u32 },
 }
 
 impl Instruction {
@@ -51,7 +52,8 @@ impl Instruction {
             Instruction::Less => f.write_str("OP_LESS"),
             Instruction::Print => f.write_str("OP_PRINT"),
             Instruction::Pop => f.write_str("OP_POP"),
-            Instruction::DefineGlobal { name_index } => f.write_fmt(format_args!("OP_DEFINE_GLOBAL ({})", chunk.constant(*name_index as usize),)),
+            Instruction::DefineGlobal { name_index } => f.write_fmt(format_args!("OP_DEFINE_GLOBAL ({})", chunk.constant(*name_index as usize))),
+            Instruction::FetchGlobal { name_index } => f.write_fmt(format_args!("OP_FETCH_GLOBAL ({})", chunk.constant(*name_index as usize))),
         }
     }
 }
