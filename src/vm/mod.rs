@@ -21,7 +21,7 @@ pub struct VM {
     pub captured_prints: Vec<String>,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum InterpretErrors {
     #[error("Reached the end of a chunk unexpectedly")]
     ReachedEndOfChunk,
@@ -170,6 +170,14 @@ impl VM {
                         None => return Err(InterpretErrors::UndefinedVariable(name)),
                     }
                 }
+                Instruction::SetGlobal { name_index } => {
+                    let name = self.fetch_constant_name(chunk, *name_index as usize)?;
+                    if !self.globals.contains_key(&name) {
+                        return Err(InterpretErrors::UndefinedVariable(name));
+                    }
+                    let value = self.pop()?;
+                    self.globals.insert(name, value);
+                }
             }
         }
 
@@ -181,7 +189,10 @@ impl VM {
 mod tests {
     use rstest::rstest;
 
-    use crate::bytecode::{Chunk, Instruction, Value};
+    use crate::{
+        bytecode::{Chunk, Instruction, Value},
+        vm::InterpretErrors,
+    };
 
     use super::VM;
 
@@ -293,5 +304,31 @@ mod tests {
         vm.globals.insert("asdf".to_string(), Value::Double(42.0));
         vm.interpret(&chunk).unwrap();
         assert_eq!(vm.pop().unwrap(), Value::Double(42.0));
+    }
+
+    #[test]
+    fn globals_set_not_defined() {
+        let mut chunk = Chunk::new();
+
+        let name_index = chunk.make_constant(Value::String("asdf".to_string()));
+        chunk.write(Instruction::SetGlobal { name_index }, 123);
+
+        let mut vm = VM::new();
+        assert_eq!(vm.interpret(&chunk), Err(InterpretErrors::UndefinedVariable("asdf".to_string())));
+    }
+
+    #[test]
+    fn globals_set_is_defined() {
+        let mut chunk = Chunk::new();
+
+        let name_index = chunk.make_constant(Value::String("asdf".to_string()));
+        chunk.write(Instruction::DefineGlobal { name_index }, 123);
+        chunk.write(Instruction::SetGlobal { name_index }, 123);
+
+        let mut vm = VM::new();
+        vm.stack.push(Value::Double(12.0));
+        vm.stack.push(Value::Double(42.0));
+        vm.interpret(&chunk).unwrap();
+        assert_eq!(*vm.globals.get(&"asdf".to_string()).unwrap(), Value::Double(12.0));
     }
 }

@@ -51,6 +51,12 @@ var breakfast = \"beignets with \" + beverage;
 print breakfast;",
     "beignets with cafe au lait"
 )]
+#[case(
+    "var x = 1;
+x = 2;
+print x;",
+    "2"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&source).unwrap();
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });

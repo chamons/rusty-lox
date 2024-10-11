@@ -45,7 +45,7 @@ impl Precedence {
     }
 }
 
-type ParseFunction = fn(&mut Compiler, parser: &mut Parser) -> eyre::Result<()>;
+type ParseFunction = fn(&mut Compiler, parser: &mut Parser, can_assign: bool) -> eyre::Result<()>;
 
 struct ParseRule {
     prefix: Option<ParseFunction>,
@@ -56,67 +56,67 @@ struct ParseRule {
 fn get_parse_rule(token_type: &TokenType) -> ParseRule {
     match token_type {
         TokenType::LeftParen => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.grouping(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.grouping(p, can_assign)),
             infix: None,
             precedence: Precedence::None,
         },
         TokenType::Minus => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.unary(p)),
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.unary(p, can_assign)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Term,
         },
         TokenType::Plus => ParseRule {
             prefix: None,
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Term,
         },
         TokenType::Slash => ParseRule {
             prefix: None,
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Factor,
         },
         TokenType::Star => ParseRule {
             prefix: None,
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Factor,
         },
         TokenType::Number(_) => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.number(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.number(p, can_assign)),
             infix: None,
             precedence: Precedence::None,
         },
         TokenType::False | TokenType::True | TokenType::Nil => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.literal(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.literal(p, can_assign)),
             infix: None,
             precedence: Precedence::None,
         },
         TokenType::Bang => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.unary(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.unary(p, can_assign)),
             infix: None,
             precedence: Precedence::None,
         },
         TokenType::BangEqual => ParseRule {
             prefix: None,
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Equality,
         },
         TokenType::EqualEqual => ParseRule {
             prefix: None,
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Equality,
         },
         TokenType::Greater | TokenType::GreaterEqual | TokenType::Less | TokenType::LessEqual => ParseRule {
             prefix: None,
-            infix: Some(|c: &mut Compiler, p: &mut Parser| c.binary(p)),
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.binary(p, can_assign)),
             precedence: Precedence::Comparison,
         },
         TokenType::String(_) => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.string(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.string(p, can_assign)),
             infix: None,
             precedence: Precedence::None,
         },
         TokenType::Identifier(_) => ParseRule {
-            prefix: Some(|c: &mut Compiler, p: &mut Parser| c.variable(p)),
+            prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.variable(p, can_assign)),
             infix: None,
             precedence: Precedence::None,
         },
@@ -227,7 +227,7 @@ impl Compiler {
         self.chunk.write_constant(value, line);
     }
 
-    fn number(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn number(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         match &parser.previous.token_type {
             TokenType::Number(v) => {
                 let number = v.parse::<f64>()?;
@@ -238,22 +238,27 @@ impl Compiler {
         }
     }
 
-    fn variable(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        self.named_variable(parser)
+    fn variable(&mut self, parser: &mut Parser, can_assign: bool) -> eyre::Result<()> {
+        self.named_variable(parser, can_assign)
     }
 
-    fn named_variable(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn named_variable(&mut self, parser: &mut Parser, can_assign: bool) -> eyre::Result<()> {
         match &parser.previous.token_type {
             TokenType::Identifier(name) => {
                 let name_index = self.chunk.make_constant(Value::String(name.clone()));
-                self.chunk.write(Instruction::FetchGlobal { name_index }, parser.previous.line);
+
+                if can_assign && self.match_token(parser, TokenType::Equal)? {
+                    self.chunk.write(Instruction::SetGlobal { name_index }, parser.previous.line);
+                } else {
+                    self.chunk.write(Instruction::FetchGlobal { name_index }, parser.previous.line);
+                }
                 Ok(())
             }
             _ => Err(eyre::eyre!("Unexpected token type generating named variable")),
         }
     }
 
-    fn string(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn string(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         match &parser.previous.token_type {
             TokenType::String(v) => {
                 self.emit_constant(Value::String(v.clone()), parser.previous.line);
@@ -263,13 +268,13 @@ impl Compiler {
         }
     }
 
-    fn grouping(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn grouping(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         self.expression(parser)?;
         self.consume(parser, TokenType::RightParen, "Expect ')' after expression.")?;
         Ok(())
     }
 
-    fn unary(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn unary(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         let operator_type = parser.previous.token_type.clone();
 
         self.parse_precedence(parser, Precedence::Unary)?;
@@ -344,7 +349,7 @@ impl Compiler {
         self.parse_precedence(parser, Precedence::Assignment)
     }
 
-    fn binary(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn binary(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         let operator_type = parser.previous.token_type.clone();
 
         let rule = get_parse_rule(&operator_type);
@@ -377,7 +382,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn literal(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+    fn literal(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         match parser.previous.token_type {
             TokenType::False => self.chunk.write_constant(Value::Bool(false), parser.previous.line),
             TokenType::True => self.chunk.write_constant(Value::Bool(true), parser.previous.line),
@@ -393,9 +398,10 @@ impl Compiler {
         info!(previous = ?parser.previous.token_type, current = ?parser.current.token_type, "parse_precedence");
 
         let rule = get_parse_rule(&parser.previous.token_type);
+        let can_assign = precedence <= Precedence::Assignment;
 
         if let Some(prefix) = &rule.prefix {
-            prefix(self, parser)?;
+            prefix(self, parser, can_assign)?;
         } else {
             return Err(eyre::eyre!("Expect expression"));
         }
@@ -406,10 +412,14 @@ impl Compiler {
             info!(precedence = ?rule.precedence, "parse_precedence inner");
 
             if let Some(infix) = &rule.infix {
-                infix(self, parser)?;
+                infix(self, parser, can_assign)?;
             } else {
                 return Err(eyre::eyre!("Expect expression"));
             }
+        }
+
+        if can_assign && self.match_token(parser, TokenType::Equal)? {
+            return Err(eyre::eyre!("Invalid assignment target."));
         }
 
         Ok(())
@@ -457,6 +467,7 @@ mod tests {
 
     #[rstest]
     #[case("-false;")]
+    #[case("a * b = c + d;")]
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
