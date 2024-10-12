@@ -20,8 +20,12 @@ impl Chunk {
     }
 
     pub fn make_constant(&mut self, value: Value) -> u32 {
-        self.constants.push(value);
-        (self.constants.len() - 1) as u32
+        if let Some(existing_index) = self.constants.iter().position(|c| *c == value) {
+            existing_index as u32
+        } else {
+            self.constants.push(value);
+            (self.constants.len() - 1) as u32
+        }
     }
 
     pub fn write_constant(&mut self, value: Value, line: u32) {
