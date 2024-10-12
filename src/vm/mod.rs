@@ -55,7 +55,7 @@ impl VM {
     }
 
     fn peek(&mut self) -> Result<&Value, InterpretErrors> {
-        self.stack.first().ok_or(InterpretErrors::PoppedEndOfStack)
+        self.stack.last().ok_or(InterpretErrors::PoppedEndOfStack)
     }
 
     fn pop_double(&mut self) -> Result<f64, InterpretErrors> {
@@ -181,6 +181,13 @@ impl VM {
                     }
                     let value = self.peek()?.clone();
                     self.globals.insert(name, value);
+                }
+                Instruction::SetLocal { index } => {
+                    let value = self.peek()?.clone();
+                    self.stack[*index as usize] = value;
+                }
+                Instruction::GetLocal { index } => {
+                    self.stack.push(self.stack[*index as usize].clone());
                 }
             }
         }
@@ -335,5 +342,25 @@ mod tests {
         vm.interpret(&chunk).unwrap();
         assert_eq!(*vm.globals.get(&"asdf".to_string()).unwrap(), Value::Double(12.0));
         assert_eq!(1, vm.stack.len());
+    }
+
+    #[test]
+    fn locals() {
+        let mut chunk = Chunk::new();
+
+        chunk.write(Instruction::SetLocal { index: 0 }, 123);
+        chunk.write(Instruction::Pop, 123);
+        chunk.write(Instruction::GetLocal { index: 0 }, 123);
+
+        let mut vm = VM::new();
+        // The starting value of our local
+        vm.stack.push(Value::Double(42.0));
+        // The new value
+        vm.stack.push(Value::Double(12.0));
+        vm.interpret(&chunk).unwrap();
+
+        assert_eq!(2, vm.stack.len());
+        assert_eq!(Value::Double(12.0), vm.stack[0]);
+        assert_eq!(Value::Double(12.0), vm.stack[1]);
     }
 }

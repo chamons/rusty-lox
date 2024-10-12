@@ -1,6 +1,7 @@
 use crate::compiler::tokens::token::Token;
 
 pub struct Local {
-    name: Token,
-    depth: u32,
+    pub token: Token,
+    pub depth: u32,
+    pub initialized: bool,
 }

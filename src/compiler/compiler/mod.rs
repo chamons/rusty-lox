@@ -11,7 +11,7 @@ use crate::{
     compiler::parser::Parser,
 };
 
-use super::tokens::token::TokenType;
+use super::tokens::token::{Token, TokenType};
 
 mod locals;
 
@@ -162,6 +162,12 @@ impl Display for CompileErrors {
     }
 }
 
+#[derive(Debug)]
+enum VariableInfo {
+    Global { name_index: u32 },
+    Local { token: Token, depth: u32 },
+}
+
 pub struct Compiler {
     chunk: Chunk,
     locals: Vec<Local>,
@@ -254,14 +260,24 @@ impl Compiler {
     fn named_variable(&mut self, parser: &mut Parser, can_assign: bool) -> eyre::Result<()> {
         match &parser.previous.token_type {
             TokenType::Identifier(name) => {
-                let name_index = self.chunk.make_constant(Value::String(name.clone()));
+                let local_position = self.locals.iter().rposition(|l| l.token.token_type == parser.previous.token_type);
+                let (get, set) = if let Some(local_position) = local_position {
+                    (
+                        Instruction::GetLocal { index: local_position as u32 },
+                        Instruction::SetLocal { index: local_position as u32 },
+                    )
+                } else {
+                    let name_index = self.chunk.make_constant(Value::String(name.clone()));
+                    (Instruction::FetchGlobal { name_index }, Instruction::SetGlobal { name_index })
+                };
 
                 if can_assign && self.match_token(parser, TokenType::Equal)? {
                     self.expression(parser)?;
-                    self.chunk.write(Instruction::SetGlobal { name_index }, parser.previous.line);
+                    self.chunk.write(set, parser.previous.line);
                 } else {
-                    self.chunk.write(Instruction::FetchGlobal { name_index }, parser.previous.line);
+                    self.chunk.write(get, parser.previous.line);
                 }
+
                 Ok(())
             }
             _ => Err(eyre::eyre!("Unexpected token type generating named variable")),
@@ -307,7 +323,7 @@ impl Compiler {
     }
 
     fn variable_declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        let global = self.parse_variable(parser)?;
+        let variable_info = self.parse_variable(parser)?;
 
         if self.match_token(parser, TokenType::Equal)? {
             self.expression(parser)?;
@@ -317,16 +333,44 @@ impl Compiler {
 
         self.consume(parser, TokenType::Semicolon, "Expect ';' after variable declaration.")?;
 
-        self.chunk.write(Instruction::DefineGlobal { name_index: global }, parser.previous.line);
+        match variable_info {
+            VariableInfo::Global { name_index } => {
+                self.chunk.write(Instruction::DefineGlobal { name_index }, parser.previous.line);
+            }
+            VariableInfo::Local { token, depth } => {
+                for local in self.locals.iter().rev() {
+                    if local.initialized && local.depth < depth {
+                        break;
+                    }
+                    if local.token.token_type == token.token_type {
+                        return Err(eyre::eyre!("Already a variable with this name in this scope."));
+                    }
+                }
+                self.locals.push(Local {
+                    token,
+                    depth,
+                    initialized: true,
+                });
+            }
+        }
 
         Ok(())
     }
 
-    fn parse_variable(&mut self, parser: &mut Parser) -> eyre::Result<u32> {
+    fn parse_variable(&mut self, parser: &mut Parser) -> eyre::Result<VariableInfo> {
         match parser.current.token_type.clone() {
             TokenType::Identifier(identifier) => {
                 parser.advance()?;
-                Ok(self.chunk.make_constant(Value::String(identifier)))
+                if self.scope_depth > 0 {
+                    Ok(VariableInfo::Local {
+                        token: parser.previous.clone(),
+                        depth: self.scope_depth,
+                    })
+                } else {
+                    Ok(VariableInfo::Global {
+                        name_index: self.chunk.make_constant(Value::String(identifier)),
+                    })
+                }
             }
             _ => Err(eyre::eyre!("Expect identifier")),
         }
@@ -338,7 +382,7 @@ impl Compiler {
         } else if self.match_token(parser, TokenType::LeftBrace)? {
             self.begin_scope();
             self.block(parser)?;
-            self.end_scope();
+            self.end_scope(&parser);
         } else {
             self.expression_statement(parser)?;
         }
@@ -349,8 +393,14 @@ impl Compiler {
         self.scope_depth += 1;
     }
 
-    fn end_scope(&mut self) {
+    fn end_scope(&mut self, parser: &Parser) {
         self.scope_depth -= 1;
+
+        let local_to_pop = self.locals.iter().filter(|l| l.depth > self.scope_depth).count();
+        for _ in 0..local_to_pop {
+            self.chunk.write(Instruction::Pop, parser.current.line);
+            self.locals.pop();
+        }
     }
 
     fn block(&mut self, parser: &mut Parser) -> eyre::Result<()> {
@@ -492,6 +542,14 @@ mod tests {
     #[case("!false;")]
     #[case("var x = 42;")]
     #[case("{ var x = 42; }")]
+    #[case(
+        "{
+  var a = \"outer\";
+  {
+    var a = \"inner\";
+  }
+}"
+    )]
     fn compile_expected(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
@@ -499,8 +557,45 @@ mod tests {
 
     #[rstest]
     #[case("a * b = c + d;")]
+    #[case(
+        "{
+  var a = \"first\";
+  var a = \"second\";
+}"
+    )]
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         assert!(compiler.compile(&input).is_err());
+    }
+
+    #[test]
+    fn locals_scoping() {
+        let mut compiler = Compiler::new();
+        compiler
+            .compile(
+                "{
+  var a = \"outer\";
+  {
+    var a = \"inner\";
+  }
+}",
+            )
+            .unwrap();
+        assert_eq!(0, compiler.locals.len());
+    }
+
+    #[test]
+    fn locals_scoping_redeclare_referencing_same() {
+        let mut compiler = Compiler::new();
+        assert!(compiler
+            .compile(
+                "{
+  var a = \"outer\";
+  {
+    var a = a;
+  }
+}",
+            )
+            .is_err());
     }
 }

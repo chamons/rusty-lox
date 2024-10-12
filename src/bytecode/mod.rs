@@ -25,6 +25,8 @@ pub enum Instruction {
     DefineGlobal { name_index: u32 },
     FetchGlobal { name_index: u32 },
     SetGlobal { name_index: u32 },
+    SetLocal { index: u32 },
+    GetLocal { index: u32 },
 }
 
 impl Instruction {
@@ -56,6 +58,8 @@ impl Instruction {
             Instruction::DefineGlobal { name_index } => f.write_fmt(format_args!("OP_DEFINE_GLOBAL ({})", chunk.constant(*name_index as usize))),
             Instruction::FetchGlobal { name_index } => f.write_fmt(format_args!("OP_FETCH_GLOBAL ({})", chunk.constant(*name_index as usize))),
             Instruction::SetGlobal { name_index } => f.write_fmt(format_args!("OP_SET_GLOBAL ({})", chunk.constant(*name_index as usize))),
+            Instruction::SetLocal { index } => f.write_fmt(format_args!("OP_SET_LOCAL ({index})")),
+            Instruction::GetLocal { index } => f.write_fmt(format_args!("OP_GET_LOCAL ({index})")),
         }
     }
 }
