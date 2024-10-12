@@ -248,6 +248,7 @@ impl Compiler {
                 let name_index = self.chunk.make_constant(Value::String(name.clone()));
 
                 if can_assign && self.match_token(parser, TokenType::Equal)? {
+                    self.expression(parser)?;
                     self.chunk.write(Instruction::SetGlobal { name_index }, parser.previous.line);
                 } else {
                     self.chunk.write(Instruction::FetchGlobal { name_index }, parser.previous.line);
@@ -466,10 +467,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case("-false;")]
     #[case("a * b = c + d;")]
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
-        compiler.compile(&input).unwrap();
+        assert!(compiler.compile(&input).is_err());
     }
 }

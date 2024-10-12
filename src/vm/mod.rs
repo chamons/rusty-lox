@@ -54,6 +54,10 @@ impl VM {
         self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)
     }
 
+    fn peek(&mut self) -> Result<&Value, InterpretErrors> {
+        self.stack.first().ok_or(InterpretErrors::PoppedEndOfStack)
+    }
+
     fn pop_double(&mut self) -> Result<f64, InterpretErrors> {
         let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
         match value {
@@ -175,7 +179,7 @@ impl VM {
                     if !self.globals.contains_key(&name) {
                         return Err(InterpretErrors::UndefinedVariable(name));
                     }
-                    let value = self.pop()?;
+                    let value = self.peek()?.clone();
                     self.globals.insert(name, value);
                 }
             }
@@ -330,5 +334,6 @@ mod tests {
         vm.stack.push(Value::Double(42.0));
         vm.interpret(&chunk).unwrap();
         assert_eq!(*vm.globals.get(&"asdf".to_string()).unwrap(), Value::Double(12.0));
+        assert_eq!(1, vm.stack.len());
     }
 }
