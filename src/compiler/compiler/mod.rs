@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Write},
 };
 
+use locals::Local;
 use tracing::{error, info};
 
 use crate::{
@@ -11,6 +12,8 @@ use crate::{
 };
 
 use super::tokens::token::TokenType;
+
+mod locals;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Precedence {
@@ -161,11 +164,17 @@ impl Display for CompileErrors {
 
 pub struct Compiler {
     chunk: Chunk,
+    locals: Vec<Local>,
+    scope_depth: u32,
 }
 
 impl Compiler {
     pub fn new() -> Self {
-        Self { chunk: Chunk::new() }
+        Self {
+            chunk: Chunk::new(),
+            locals: vec![],
+            scope_depth: 0,
+        }
     }
 
     pub fn compile(&mut self, source: &str) -> eyre::Result<Chunk> {
@@ -326,9 +335,30 @@ impl Compiler {
     fn statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         if self.match_token(parser, TokenType::Print)? {
             self.print_statement(parser)?;
+        } else if self.match_token(parser, TokenType::LeftBrace)? {
+            self.begin_scope();
+            self.block(parser)?;
+            self.end_scope();
         } else {
             self.expression_statement(parser)?;
         }
+        Ok(())
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
+    }
+
+    fn block(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        while parser.current.token_type != TokenType::RightBrace && parser.current.token_type != TokenType::Eof {
+            self.declaration(parser)?;
+        }
+
+        self.consume(parser, TokenType::RightBrace, "Expect '}' after block.")?;
         Ok(())
     }
 
@@ -461,6 +491,7 @@ mod tests {
     #[case("nil;")]
     #[case("!false;")]
     #[case("var x = 42;")]
+    #[case("{ var x = 42; }")]
     fn compile_expected(#[case] input: String) {
         let mut compiler = Compiler::new();
         compiler.compile(&input).unwrap();
