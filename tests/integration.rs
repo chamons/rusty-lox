@@ -71,6 +71,7 @@ fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&source).unwrap();
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
+    println!("{chunk}");
     vm.interpret(&chunk).unwrap();
 
     assert_eq!(expected, vm.captured_prints[0]);

@@ -262,6 +262,10 @@ impl Compiler {
             TokenType::Identifier(name) => {
                 let local_position = self.locals.iter().rposition(|l| l.token.token_type == parser.previous.token_type);
                 let (get, set) = if let Some(local_position) = local_position {
+                    if !self.locals[local_position].initialized {
+                        return Err(eyre::eyre!("Can't read local variable in its own initializer."));
+                    }
+
                     (
                         Instruction::GetLocal { index: local_position as u32 },
                         Instruction::SetLocal { index: local_position as u32 },
@@ -325,36 +329,61 @@ impl Compiler {
     fn variable_declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         let variable_info = self.parse_variable(parser)?;
 
+        self.declare_variable(&variable_info)?;
+
         if self.match_token(parser, TokenType::Equal)? {
             self.expression(parser)?;
         } else {
             self.chunk.write_constant(Value::Nil, parser.previous.line);
         }
 
+        self.define_variable(parser, &variable_info)?;
+
         self.consume(parser, TokenType::Semicolon, "Expect ';' after variable declaration.")?;
 
+        Ok(())
+    }
+
+    fn declare_variable(&mut self, variable_info: &VariableInfo) -> eyre::Result<()> {
+        if let VariableInfo::Local { token, depth } = variable_info {
+            for local in self.locals.iter().rev() {
+                if local.initialized && local.depth < *depth {
+                    break;
+                }
+                if local.token.token_type == token.token_type {
+                    return Err(eyre::eyre!("Already a variable with this name in this scope."));
+                }
+            }
+            self.locals.push(Local {
+                token: token.clone(),
+                depth: *depth,
+                initialized: false,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn define_variable(&mut self, parser: &Parser, variable_info: &VariableInfo) -> eyre::Result<()> {
         match variable_info {
             VariableInfo::Global { name_index } => {
-                self.chunk.write(Instruction::DefineGlobal { name_index }, parser.previous.line);
+                self.chunk.write(Instruction::DefineGlobal { name_index: *name_index }, parser.previous.line);
             }
-            VariableInfo::Local { token, depth } => {
-                for local in self.locals.iter().rev() {
-                    if local.initialized && local.depth < depth {
-                        break;
-                    }
-                    if local.token.token_type == token.token_type {
-                        return Err(eyre::eyre!("Already a variable with this name in this scope."));
-                    }
-                }
-                self.locals.push(Local {
-                    token,
-                    depth,
-                    initialized: true,
-                });
+            VariableInfo::Local { .. } => {
+                self.mark_initialized();
             }
         }
 
         Ok(())
+    }
+
+    fn mark_initialized(&mut self) {
+        if self.scope_depth == 0 {
+            return;
+        }
+        if let Some(last) = self.locals.last_mut() {
+            last.initialized = true;
+        }
     }
 
     fn parse_variable(&mut self, parser: &mut Parser) -> eyre::Result<VariableInfo> {
