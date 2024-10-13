@@ -47,7 +47,7 @@ impl<'a> Scanner<'a> {
             }
         };
 
-        if c.is_digit(10) {
+        if c.is_ascii_digit() {
             return self.process_number(c);
         } else if c.is_alphabetic() {
             return self.process_identifier(c);
@@ -163,26 +163,26 @@ impl<'a> Scanner<'a> {
             return Err(eyre::eyre!("Unterminated String"));
         }
         self.advance();
-        return Ok(Token {
+        Ok(Token {
             token_type: TokenType::String(value),
             line: self.line,
-        });
+        })
     }
 
     fn process_number(&mut self, starting_character: char) -> eyre::Result<Token> {
         let mut value = starting_character.to_string();
         value.push_str(&self.consume_numbers());
 
-        if self.source.peek() == Some('.') && self.source.peek_two().map_or(false, |c| c.is_digit(10)) {
+        if self.source.peek() == Some('.') && self.source.peek_two().map_or(false, |c| c.is_ascii_digit()) {
             value.push('.');
             self.advance();
             value.push_str(&self.consume_numbers());
         }
 
-        return Ok(Token {
+        Ok(Token {
             token_type: TokenType::Number(value),
             line: self.line,
-        });
+        })
     }
 
     fn process_identifier(&mut self, starting_character: char) -> eyre::Result<Token> {
@@ -203,10 +203,10 @@ impl<'a> Scanner<'a> {
         }
 
         if let Some(token_type) = self.keywords.get(&value) {
-            return Ok(Token {
+            Ok(Token {
                 token_type: token_type.clone(),
                 line: self.line,
-            });
+            })
         } else {
             Ok(Token {
                 token_type: TokenType::Identifier(value),
@@ -233,7 +233,7 @@ impl<'a> Scanner<'a> {
                 }
             }
         }
-        return value;
+        value
     }
 
     fn token(&mut self, token_type: TokenType) -> eyre::Result<Token> {

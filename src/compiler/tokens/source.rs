@@ -16,6 +16,7 @@ impl<'a> Source<'a> {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<char> {
         if let Some(buffered) = self.buffered.take() {
             Some(buffered)

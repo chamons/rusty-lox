@@ -32,7 +32,7 @@ impl Chunk {
         let index = self.make_constant(value);
 
         if index > u8::MAX as u32 {
-            self.write(Instruction::LongConstant { index: index as u32 }, line);
+            self.write(Instruction::LongConstant { index }, line);
         } else {
             self.write(Instruction::Constant { index: index as u8 }, line);
         }

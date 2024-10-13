@@ -36,6 +36,12 @@ pub enum InterpretErrors {
     UndefinedVariable(String),
 }
 
+impl Default for VM {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VM {
     pub fn new() -> Self {
         Self::new_from_settings(VMSettings::default())
