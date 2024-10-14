@@ -422,6 +422,8 @@ impl Compiler {
     fn statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         if self.match_token(parser, TokenType::Print)? {
             self.print_statement(parser)?;
+        } else if self.match_token(parser, TokenType::If)? {
+            self.if_statement(parser)?;
         } else if self.match_token(parser, TokenType::LeftBrace)? {
             self.begin_scope();
             self.block(parser)?;
@@ -452,6 +454,19 @@ impl Compiler {
         }
 
         self.consume(parser, TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(())
+    }
+
+    fn if_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.consume(parser, TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        self.expression(parser)?;
+        self.consume(parser, TokenType::RightParen, "Expect ')' after condition.")?;
+
+        let jump_offset = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.statement(parser)?;
+
+        self.chunk.patch_jump(jump_offset)?;
+
         Ok(())
     }
 

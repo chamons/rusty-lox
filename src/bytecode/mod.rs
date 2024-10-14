@@ -27,6 +27,7 @@ pub enum Instruction {
     SetGlobal { name_index: u32 },
     SetLocal { index: u32 },
     GetLocal { index: u32 },
+    JumpIfFalse { offset: u32 },
 }
 
 impl Instruction {
@@ -60,6 +61,7 @@ impl Instruction {
             Instruction::SetGlobal { name_index } => f.write_fmt(format_args!("OP_SET_GLOBAL ({})", chunk.constant(*name_index as usize))),
             Instruction::SetLocal { index } => f.write_fmt(format_args!("OP_SET_LOCAL ({index})")),
             Instruction::GetLocal { index } => f.write_fmt(format_args!("OP_GET_LOCAL ({index})")),
+            Instruction::JumpIfFalse { offset } => f.write_fmt(format_args!("OP_JUST_IF_FALSE ({offset})")),
         }
     }
 }
@@ -70,6 +72,16 @@ pub enum Value {
     Bool(bool),
     Nil,
     String(String),
+}
+
+impl Value {
+    pub fn is_falsey(&self) -> bool {
+        match self {
+            Value::Double(_) | Value::String(_) => false,
+            Value::Bool(v) => !v,
+            Value::Nil => true,
+        }
+    }
 }
 
 impl Display for Value {

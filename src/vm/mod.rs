@@ -72,12 +72,11 @@ impl VM {
     }
 
     fn pop_falsey(&mut self) -> Result<bool, InterpretErrors> {
-        let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
-        Ok(match value {
-            Value::Double(_) | Value::String(_) => false,
-            Value::Bool(v) => !v,
-            Value::Nil => true,
-        })
+        Ok(self.pop()?.is_falsey())
+    }
+
+    fn peek_falsey(&mut self) -> Result<bool, InterpretErrors> {
+        Ok(self.peek()?.is_falsey())
     }
 
     fn fetch_constant_name(&mut self, chunk: &Chunk, index: usize) -> Result<String, InterpretErrors> {
@@ -200,6 +199,11 @@ impl VM {
                 Instruction::GetLocal { index } => {
                     self.stack.push(self.stack[*index as usize].clone());
                 }
+                Instruction::JumpIfFalse { offset } => {
+                    if self.peek_falsey()? {
+                        self.ip += *offset as usize;
+                    }
+                }
             }
         }
     }
@@ -214,7 +218,7 @@ mod tests {
         vm::InterpretErrors,
     };
 
-    use super::VM;
+    use super::{VMSettings, VM};
 
     #[test]
     fn executes_return_zero() {
@@ -371,5 +375,21 @@ mod tests {
         assert_eq!(2, vm.stack.len());
         assert_eq!(Value::Double(12.0), vm.stack[0]);
         assert_eq!(Value::Double(12.0), vm.stack[1]);
+    }
+
+    #[test]
+    fn if_jumps() {
+        let mut chunk = Chunk::new();
+
+        chunk.write_constant(Value::Bool(false), 123);
+
+        let jump_offset = chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, 126);
+        chunk.write_constant(Value::Nil, 124);
+        chunk.write(Instruction::Print, 124);
+        chunk.patch_jump(jump_offset).unwrap();
+
+        let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+        vm.interpret(&chunk).unwrap();
+        assert!(vm.captured_prints.is_empty());
     }
 }

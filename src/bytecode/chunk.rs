@@ -49,6 +49,24 @@ impl Chunk {
     pub fn code(&self) -> &[Instruction] {
         &self.code
     }
+
+    pub fn write_jump(&mut self, instruction: Instruction, line: u32) -> usize {
+        self.write(instruction, line);
+        self.code.len() - 1
+    }
+
+    pub fn patch_jump(&mut self, jump_offset: usize) -> eyre::Result<()> {
+        let new_offset = self.code.len() - jump_offset - 1;
+
+        let instruction = &mut self.code[jump_offset];
+        match instruction {
+            Instruction::JumpIfFalse { offset } => {
+                *offset = new_offset as u32;
+                Ok(())
+            }
+            i => Err(eyre::eyre!("Invalid instruction {i:?} found when trying to patch a jump")),
+        }
+    }
 }
 
 impl Display for Chunk {
@@ -106,5 +124,31 @@ mod tests {
         }
         assert!(matches!(chunk.code[255], Instruction::Constant { .. }));
         assert!(matches!(chunk.code[256], Instruction::LongConstant { .. }));
+    }
+
+    #[test]
+    fn write_jump() {
+        let mut chunk = Chunk::new();
+
+        chunk.write(Instruction::Constant { index: 0 }, 123);
+        chunk.write(Instruction::LongConstant { index: 1 }, 124);
+        chunk.constants.push(Value::Double(1.2));
+        chunk.constants.push(Value::Double(12.2));
+        chunk.write(Instruction::Add, 125);
+
+        let offset = chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, 126);
+        assert!(matches!(chunk.code[offset], Instruction::JumpIfFalse { .. }));
+
+        chunk.write(Instruction::Constant { index: 0 }, 123);
+        chunk.write(Instruction::LongConstant { index: 1 }, 124);
+        chunk.constants.push(Value::Double(1.2));
+        chunk.constants.push(Value::Double(12.2));
+        chunk.write(Instruction::Add, 125);
+        chunk.write(Instruction::Pop, 125);
+        chunk.patch_jump(offset).unwrap();
+
+        if let Instruction::JumpIfFalse { offset } = chunk.code[offset] {
+            assert_eq!(offset, 4);
+        }
     }
 }
