@@ -211,6 +211,9 @@ impl VM {
                 Instruction::Jump { offset } => {
                     self.ip += *offset as usize;
                 }
+                Instruction::JumpBack { offset } => {
+                    self.ip -= *offset as usize;
+                }
             }
         }
     }

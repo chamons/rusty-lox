@@ -434,6 +434,8 @@ impl Compiler {
             self.print_statement(parser)?;
         } else if self.match_token(parser, TokenType::If)? {
             self.if_statement(parser)?;
+        } else if self.match_token(parser, TokenType::While)? {
+            self.while_statement(parser)?;
         } else if self.match_token(parser, TokenType::LeftBrace)? {
             self.begin_scope();
             self.block(parser)?;
@@ -464,6 +466,30 @@ impl Compiler {
         }
 
         self.consume(parser, TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(())
+    }
+
+    fn while_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        let loop_start = self.chunk.code.len();
+
+        self.consume(parser, TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        self.expression(parser)?;
+        self.consume(parser, TokenType::RightParen, "Expect ')' after condition.")?;
+
+        let exit_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.statement(parser)?;
+        self.emit_loop(loop_start, &parser)?;
+        self.chunk.patch_jump(exit_jump)?;
+
+        self.chunk.write(Instruction::Pop, parser.previous.line);
+
+        Ok(())
+    }
+
+    fn emit_loop(&mut self, loop_start: usize, parser: &Parser) -> eyre::Result<()> {
+        let offset = (self.chunk.code.len() - loop_start + 1) as u32;
+        self.chunk.write(Instruction::JumpBack { offset }, parser.previous.line);
         Ok(())
     }
 

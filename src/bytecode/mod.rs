@@ -29,6 +29,7 @@ pub enum Instruction {
     GetLocal { index: u32 },
     JumpIfFalse { offset: u32 },
     Jump { offset: u32 },
+    JumpBack { offset: u32 },
 }
 
 impl Instruction {
@@ -64,6 +65,7 @@ impl Instruction {
             Instruction::GetLocal { index } => f.write_fmt(format_args!("OP_GET_LOCAL ({index})")),
             Instruction::JumpIfFalse { offset } => f.write_fmt(format_args!("OP_JUMP_IF_FALSE ({offset})")),
             Instruction::Jump { offset } => f.write_fmt(format_args!("OP_JUMP ({offset})")),
+            Instruction::JumpBack { offset } => f.write_fmt(format_args!("OP_JUMP_BACK ({offset})")),
         }
     }
 }

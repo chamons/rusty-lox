@@ -112,10 +112,41 @@ print x;",
     }",
     "1"
 )]
+#[case(
+    "var output = \"\";
+    var count = 0;
+    if (count < 5)
+    {
+        count = count + 1;
+        output = output + \"a\";
+    }
+    print output;",
+    "a"
+)]
+#[case(
+    "var output = \"\";
+    var count = 0;
+    while (count < 5)
+    {
+        count = count + 1;
+        output = output + \"a\";
+    }
+    print output;",
+    "aaaaa"
+)]
+#[case(
+    "var count = 0;
+    while (count < 500)
+    {
+        count = count + 1;
+    }
+    print \"done\";",
+    "done"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&source).unwrap();
 
-    println!("{chunk}");
+    // println!("{chunk}");
 
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
