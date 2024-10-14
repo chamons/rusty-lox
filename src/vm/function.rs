@@ -18,7 +18,7 @@ impl std::fmt::Display for Function {
         if let Some(name) = &self.name {
             f.write_fmt(format_args!("Function {name}"))?;
         } else {
-            f.write_fmt(format_args!("Unnamed Function"))?;
+            f.write_str("<script>")?;
         }
         Ok(())
     }
