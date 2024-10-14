@@ -4,7 +4,7 @@ use super::{Instruction, Lines, Value};
 
 #[derive(Debug, Default)]
 pub struct Chunk {
-    code: Vec<Instruction>,
+    pub code: Vec<Instruction>,
     constants: Vec<Value>,
     lines: Lines,
 }

@@ -12,6 +12,7 @@ pub struct VMSettings {
 
 #[derive(Debug)]
 pub struct VM {
+    ip: usize,
     stack: Vec<Value>,
     settings: VMSettings,
     globals: HashMap<String, Value>,
@@ -23,9 +24,6 @@ pub struct VM {
 
 #[derive(Error, Debug, PartialEq)]
 pub enum InterpretErrors {
-    #[error("Reached the end of a chunk unexpectedly")]
-    ReachedEndOfChunk,
-
     #[error("Popped value off stack with no value remaining")]
     PoppedEndOfStack,
 
@@ -49,6 +47,7 @@ impl VM {
 
     pub fn new_from_settings(settings: VMSettings) -> Self {
         VM {
+            ip: 0,
             stack: vec![],
             globals: HashMap::new(),
             settings,
@@ -89,7 +88,13 @@ impl VM {
     }
 
     pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
-        for instruction in chunk.code() {
+        loop {
+            let Some(instruction) = &chunk.code.get(self.ip) else {
+                return Ok(());
+            };
+
+            self.ip += 1;
+
             trace!(?instruction, stack = ?self.stack, "Interpreting");
 
             match instruction {
@@ -197,8 +202,6 @@ impl VM {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
