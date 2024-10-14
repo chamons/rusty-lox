@@ -131,6 +131,16 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
             infix: None,
             precedence: Precedence::None,
         },
+        TokenType::And => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.and(p, can_assign)),
+            precedence: Precedence::And,
+        },
+        TokenType::Or => ParseRule {
+            prefix: None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.or(p, can_assign)),
+            precedence: Precedence::Or,
+        },
         _ => ParseRule {
             prefix: None,
             infix: None,
@@ -476,6 +486,27 @@ impl Compiler {
         }
 
         self.chunk.patch_jump(else_jump)?;
+
+        Ok(())
+    }
+
+    fn and(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
+        let end_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.parse_precedence(parser, Precedence::And)?;
+        self.chunk.patch_jump(end_jump)?;
+        Ok(())
+    }
+
+    fn or(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
+        let else_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        let end_jump = self.chunk.write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
+
+        self.chunk.patch_jump(else_jump)?;
+
+        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.parse_precedence(parser, Precedence::Or)?;
+        self.chunk.patch_jump(end_jump)?;
 
         Ok(())
     }

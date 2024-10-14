@@ -35,6 +35,12 @@ use rusty_lox::{
 #[case("\"x\" != \"y\"", "true")]
 #[case("\"x\" + \"y\" == \"xy\"", "true")]
 #[case("\"x\" + \"y\" == \"xy\"", "true")]
+#[case("true and false", "false")]
+#[case("true and true", "true")]
+#[case("true or true", "true")]
+#[case("true or false", "true")]
+#[case("false or true", "true")]
+#[case("false or false", "false")]
 fn end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&format!("print {source};")).unwrap();
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
@@ -98,6 +104,13 @@ print x;",
         print 2;
     }",
     "2"
+)]
+#[case(
+    "if (true and false or true)
+    {
+        print 1;
+    }",
+    "1"
 )]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&source).unwrap();
