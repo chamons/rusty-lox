@@ -434,6 +434,8 @@ impl Compiler {
             self.print_statement(parser)?;
         } else if self.match_token(parser, TokenType::If)? {
             self.if_statement(parser)?;
+        } else if self.match_token(parser, TokenType::For)? {
+            self.for_statement(parser)?;
         } else if self.match_token(parser, TokenType::While)? {
             self.while_statement(parser)?;
         } else if self.match_token(parser, TokenType::LeftBrace)? {
@@ -490,6 +492,52 @@ impl Compiler {
     fn emit_loop(&mut self, loop_start: usize, parser: &Parser) -> eyre::Result<()> {
         let offset = (self.chunk.code.len() - loop_start + 1) as u32;
         self.chunk.write(Instruction::JumpBack { offset }, parser.previous.line);
+        Ok(())
+    }
+
+    fn for_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        self.begin_scope();
+        self.consume(parser, TokenType::LeftParen, "Expect '(' after 'for'.")?;
+
+        if self.match_token(parser, TokenType::Semicolon)? {
+            // No initializer
+        } else if self.match_token(parser, TokenType::Var)? {
+            self.variable_declaration(parser)?;
+        } else {
+            self.expression_statement(parser)?;
+        }
+
+        let mut loop_start = self.chunk.code.len();
+        let mut exit_jump = None;
+        if !self.match_token(parser, TokenType::Semicolon)? {
+            self.expression(parser)?;
+            self.consume(parser, TokenType::Semicolon, "Expect ';' after loop condition.")?;
+
+            exit_jump = Some(self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line));
+            self.chunk.write(Instruction::Pop, parser.previous.line);
+        }
+
+        if !self.match_token(parser, TokenType::RightParen)? {
+            let body_jump = self.chunk.write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
+            let increment_start = self.chunk.code.len();
+            self.expression(parser)?;
+            self.chunk.write(Instruction::Pop, parser.previous.line);
+            self.consume(parser, TokenType::RightParen, "Expect ')' after for clauses.")?;
+
+            self.emit_loop(loop_start, parser)?;
+            loop_start = increment_start;
+            self.chunk.patch_jump(body_jump)?;
+        }
+
+        self.statement(parser)?;
+        self.emit_loop(loop_start, parser)?;
+
+        if let Some(exit_jump) = exit_jump {
+            self.chunk.patch_jump(exit_jump)?;
+            self.chunk.write(Instruction::Pop, parser.previous.line);
+        }
+
+        self.end_scope(parser);
         Ok(())
     }
 

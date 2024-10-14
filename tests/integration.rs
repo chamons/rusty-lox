@@ -143,6 +143,36 @@ print x;",
     print \"done\";",
     "done"
 )]
+#[case(
+    "var value = 0;
+    for (var count = 0 ; count < 10 ; count = count + 1)
+    {
+        value = value + 1;
+    }
+    print value;",
+    "10"
+)]
+#[case(
+    "var value = 0;
+    for (var count = 0 ; count < 10 ;)
+    {
+        count = count + 1;
+        value = value + 1;
+    }
+    print value;",
+    "10"
+)]
+#[case(
+    "var value = 0;
+    var count = 0;
+    for (; count < 10 ;)
+    {
+        count = count + 1;
+        value = value + 1;
+    }
+    print value;",
+    "10"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&source).unwrap();
 
