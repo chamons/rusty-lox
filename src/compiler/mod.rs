@@ -9,6 +9,7 @@ use tracing::{error, info};
 use crate::{
     bytecode::{Chunk, Instruction, Value},
     compiler::parser::Parser,
+    vm::Function,
 };
 
 use tokens::token::{Token, TokenType};
@@ -18,10 +19,15 @@ pub mod tokens;
 
 pub fn compile(source: &str) -> eyre::Result<Chunk> {
     let mut compiler = Compiler::new();
-    compiler.compile(source)
+    compiler.compile(source).map(|f| f.chunk)
 }
 
 mod locals;
+
+pub enum FunctionType {
+    Function,
+    Script,
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Precedence {
@@ -187,28 +193,28 @@ enum VariableInfo {
 }
 
 pub struct Compiler {
-    chunk: Chunk,
+    function: Function,
+    function_type: FunctionType,
     locals: Vec<Local>,
     scope_depth: u32,
 }
 
-impl Default for Compiler {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Compiler {
     pub fn new() -> Self {
+        Self::new_from_type(FunctionType::Script)
+    }
+
+    pub fn new_from_type(function_type: FunctionType) -> Self {
         Self {
-            chunk: Chunk::new(),
+            function: Function::new(),
             locals: vec![],
             scope_depth: 0,
+            function_type,
         }
     }
 
-    pub fn compile(&mut self, source: &str) -> eyre::Result<Chunk> {
-        self.chunk = Chunk::new();
+    pub fn compile(&mut self, source: &str) -> eyre::Result<Function> {
+        // self.current_chunk() = Chunk::new();
 
         let mut parser = Parser::new(source)?;
         let mut errors = CompileErrors::new();
@@ -225,9 +231,13 @@ impl Compiler {
             info!(errors = %errors, "Error compiling chunk");
             Err(errors.into())
         } else {
-            info!(chunk = %self.chunk, "Compiled chunk");
-            Ok(std::mem::take(&mut self.chunk))
+            info!(chunk = %self.function, "Compiled function");
+            Ok(std::mem::take(&mut self.function))
         }
+    }
+
+    pub fn current_chunk(&mut self) -> &mut Chunk {
+        &mut self.function.chunk
     }
 
     fn synchronize(&mut self, parser: &mut Parser) -> eyre::Result<()> {
@@ -259,11 +269,11 @@ impl Compiler {
     }
 
     fn emit_return(&mut self, line: u32) {
-        self.chunk.write(Instruction::Return, line);
+        self.current_chunk().write(Instruction::Return, line);
     }
 
     fn emit_constant(&mut self, value: Value, line: u32) {
-        self.chunk.write_constant(value, line);
+        self.current_chunk().write_constant(value, line);
     }
 
     fn number(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
@@ -295,15 +305,15 @@ impl Compiler {
                         Instruction::SetLocal { index: local_position as u32 },
                     )
                 } else {
-                    let name_index = self.chunk.make_constant(Value::String(name.clone()));
+                    let name_index = self.current_chunk().make_constant(Value::String(name.clone()));
                     (Instruction::FetchGlobal { name_index }, Instruction::SetGlobal { name_index })
                 };
 
                 if can_assign && self.match_token(parser, TokenType::Equal)? {
                     self.expression(parser)?;
-                    self.chunk.write(set, parser.previous.line);
+                    self.current_chunk().write(set, parser.previous.line);
                 } else {
-                    self.chunk.write(get, parser.previous.line);
+                    self.current_chunk().write(get, parser.previous.line);
                 }
 
                 Ok(())
@@ -334,8 +344,8 @@ impl Compiler {
         self.parse_precedence(parser, Precedence::Unary)?;
 
         match operator_type {
-            TokenType::Minus => self.chunk.write(Instruction::Negate, parser.previous.line),
-            TokenType::Bang => self.chunk.write(Instruction::Not, parser.previous.line),
+            TokenType::Minus => self.current_chunk().write(Instruction::Negate, parser.previous.line),
+            TokenType::Bang => self.current_chunk().write(Instruction::Not, parser.previous.line),
             _ => return Err(eyre::eyre!("Unexpected operator type in unary expression")),
         }
 
@@ -358,7 +368,7 @@ impl Compiler {
         if self.match_token(parser, TokenType::Equal)? {
             self.expression(parser)?;
         } else {
-            self.chunk.write_constant(Value::Nil, parser.previous.line);
+            self.current_chunk().write_constant(Value::Nil, parser.previous.line);
         }
 
         self.define_variable(parser, &variable_info)?;
@@ -391,7 +401,8 @@ impl Compiler {
     fn define_variable(&mut self, parser: &Parser, variable_info: &VariableInfo) -> eyre::Result<()> {
         match variable_info {
             VariableInfo::Global { name_index } => {
-                self.chunk.write(Instruction::DefineGlobal { name_index: *name_index }, parser.previous.line);
+                self.current_chunk()
+                    .write(Instruction::DefineGlobal { name_index: *name_index }, parser.previous.line);
             }
             VariableInfo::Local { .. } => {
                 self.mark_initialized();
@@ -421,7 +432,7 @@ impl Compiler {
                     })
                 } else {
                     Ok(VariableInfo::Global {
-                        name_index: self.chunk.make_constant(Value::String(identifier)),
+                        name_index: self.current_chunk().make_constant(Value::String(identifier)),
                     })
                 }
             }
@@ -457,7 +468,7 @@ impl Compiler {
 
         let local_to_pop = self.locals.iter().filter(|l| l.depth > self.scope_depth).count();
         for _ in 0..local_to_pop {
-            self.chunk.write(Instruction::Pop, parser.current.line);
+            self.current_chunk().write(Instruction::Pop, parser.current.line);
             self.locals.pop();
         }
     }
@@ -472,26 +483,26 @@ impl Compiler {
     }
 
     fn while_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        let loop_start = self.chunk.code.len();
+        let loop_start = self.current_chunk().code.len();
 
         self.consume(parser, TokenType::LeftParen, "Expect '(' after 'while'.")?;
         self.expression(parser)?;
         self.consume(parser, TokenType::RightParen, "Expect ')' after condition.")?;
 
-        let exit_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        let exit_jump = self.current_chunk().write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
         self.statement(parser)?;
         self.emit_loop(loop_start, &parser)?;
-        self.chunk.patch_jump(exit_jump)?;
+        self.current_chunk().patch_jump(exit_jump)?;
 
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
 
         Ok(())
     }
 
     fn emit_loop(&mut self, loop_start: usize, parser: &Parser) -> eyre::Result<()> {
-        let offset = (self.chunk.code.len() - loop_start + 1) as u32;
-        self.chunk.write(Instruction::JumpBack { offset }, parser.previous.line);
+        let offset = (self.current_chunk().code.len() - loop_start + 1) as u32;
+        self.current_chunk().write(Instruction::JumpBack { offset }, parser.previous.line);
         Ok(())
     }
 
@@ -507,34 +518,34 @@ impl Compiler {
             self.expression_statement(parser)?;
         }
 
-        let mut loop_start = self.chunk.code.len();
+        let mut loop_start = self.current_chunk().code.len();
         let mut exit_jump = None;
         if !self.match_token(parser, TokenType::Semicolon)? {
             self.expression(parser)?;
             self.consume(parser, TokenType::Semicolon, "Expect ';' after loop condition.")?;
 
-            exit_jump = Some(self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line));
-            self.chunk.write(Instruction::Pop, parser.previous.line);
+            exit_jump = Some(self.current_chunk().write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line));
+            self.current_chunk().write(Instruction::Pop, parser.previous.line);
         }
 
         if !self.match_token(parser, TokenType::RightParen)? {
-            let body_jump = self.chunk.write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
-            let increment_start = self.chunk.code.len();
+            let body_jump = self.current_chunk().write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
+            let increment_start = self.current_chunk().code.len();
             self.expression(parser)?;
-            self.chunk.write(Instruction::Pop, parser.previous.line);
+            self.current_chunk().write(Instruction::Pop, parser.previous.line);
             self.consume(parser, TokenType::RightParen, "Expect ')' after for clauses.")?;
 
             self.emit_loop(loop_start, parser)?;
             loop_start = increment_start;
-            self.chunk.patch_jump(body_jump)?;
+            self.current_chunk().patch_jump(body_jump)?;
         }
 
         self.statement(parser)?;
         self.emit_loop(loop_start, parser)?;
 
         if let Some(exit_jump) = exit_jump {
-            self.chunk.patch_jump(exit_jump)?;
-            self.chunk.write(Instruction::Pop, parser.previous.line);
+            self.current_chunk().patch_jump(exit_jump)?;
+            self.current_chunk().write(Instruction::Pop, parser.previous.line);
         }
 
         self.end_scope(parser);
@@ -546,41 +557,41 @@ impl Compiler {
         self.expression(parser)?;
         self.consume(parser, TokenType::RightParen, "Expect ')' after condition.")?;
 
-        let then_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        let then_jump = self.current_chunk().write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
         self.statement(parser)?;
 
-        let else_jump = self.chunk.write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
+        let else_jump = self.current_chunk().write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
 
-        self.chunk.patch_jump(then_jump)?;
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.current_chunk().patch_jump(then_jump)?;
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
 
         if self.match_token(parser, TokenType::Else)? {
             self.statement(parser)?;
         }
 
-        self.chunk.patch_jump(else_jump)?;
+        self.current_chunk().patch_jump(else_jump)?;
 
         Ok(())
     }
 
     fn and(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
-        let end_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        let end_jump = self.current_chunk().write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
         self.parse_precedence(parser, Precedence::And)?;
-        self.chunk.patch_jump(end_jump)?;
+        self.current_chunk().patch_jump(end_jump)?;
         Ok(())
     }
 
     fn or(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
-        let else_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
-        let end_jump = self.chunk.write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
+        let else_jump = self.current_chunk().write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        let end_jump = self.current_chunk().write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
 
-        self.chunk.patch_jump(else_jump)?;
+        self.current_chunk().patch_jump(else_jump)?;
 
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
         self.parse_precedence(parser, Precedence::Or)?;
-        self.chunk.patch_jump(end_jump)?;
+        self.current_chunk().patch_jump(end_jump)?;
 
         Ok(())
     }
@@ -588,14 +599,14 @@ impl Compiler {
     fn print_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         self.expression(parser)?;
         self.consume(parser, TokenType::Semicolon, "Expect ';' after value.")?;
-        self.chunk.write(Instruction::Print, parser.previous.line);
+        self.current_chunk().write(Instruction::Print, parser.previous.line);
         Ok(())
     }
 
     fn expression_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         self.expression(parser)?;
         self.consume(parser, TokenType::Semicolon, "Expect ';' after expression.")?;
-        self.chunk.write(Instruction::Pop, parser.previous.line);
+        self.current_chunk().write(Instruction::Pop, parser.previous.line);
         Ok(())
     }
 
@@ -611,24 +622,24 @@ impl Compiler {
         self.parse_precedence(parser, rule.precedence.one_higher())?;
 
         match operator_type {
-            TokenType::Plus => self.chunk.write(Instruction::Add, parser.previous.line),
-            TokenType::Minus => self.chunk.write(Instruction::Subtract, parser.previous.line),
-            TokenType::Star => self.chunk.write(Instruction::Multiply, parser.previous.line),
-            TokenType::Slash => self.chunk.write(Instruction::Divide, parser.previous.line),
+            TokenType::Plus => self.current_chunk().write(Instruction::Add, parser.previous.line),
+            TokenType::Minus => self.current_chunk().write(Instruction::Subtract, parser.previous.line),
+            TokenType::Star => self.current_chunk().write(Instruction::Multiply, parser.previous.line),
+            TokenType::Slash => self.current_chunk().write(Instruction::Divide, parser.previous.line),
             TokenType::BangEqual => {
-                self.chunk.write(Instruction::Equal, parser.previous.line);
-                self.chunk.write(Instruction::Not, parser.previous.line);
+                self.current_chunk().write(Instruction::Equal, parser.previous.line);
+                self.current_chunk().write(Instruction::Not, parser.previous.line);
             }
-            TokenType::EqualEqual => self.chunk.write(Instruction::Equal, parser.previous.line),
-            TokenType::Greater => self.chunk.write(Instruction::Greater, parser.previous.line),
+            TokenType::EqualEqual => self.current_chunk().write(Instruction::Equal, parser.previous.line),
+            TokenType::Greater => self.current_chunk().write(Instruction::Greater, parser.previous.line),
             TokenType::GreaterEqual => {
-                self.chunk.write(Instruction::Less, parser.previous.line);
-                self.chunk.write(Instruction::Not, parser.previous.line);
+                self.current_chunk().write(Instruction::Less, parser.previous.line);
+                self.current_chunk().write(Instruction::Not, parser.previous.line);
             }
-            TokenType::Less => self.chunk.write(Instruction::Less, parser.previous.line),
+            TokenType::Less => self.current_chunk().write(Instruction::Less, parser.previous.line),
             TokenType::LessEqual => {
-                self.chunk.write(Instruction::Greater, parser.previous.line);
-                self.chunk.write(Instruction::Not, parser.previous.line);
+                self.current_chunk().write(Instruction::Greater, parser.previous.line);
+                self.current_chunk().write(Instruction::Not, parser.previous.line);
             }
             _ => return Err(eyre::eyre!("Unexpected operator type in binary expression")),
         }
@@ -638,9 +649,9 @@ impl Compiler {
 
     fn literal(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         match parser.previous.token_type {
-            TokenType::False => self.chunk.write_constant(Value::Bool(false), parser.previous.line),
-            TokenType::True => self.chunk.write_constant(Value::Bool(true), parser.previous.line),
-            TokenType::Nil => self.chunk.write_constant(Value::Nil, parser.previous.line),
+            TokenType::False => self.current_chunk().write_constant(Value::Bool(false), parser.previous.line),
+            TokenType::True => self.current_chunk().write_constant(Value::Bool(true), parser.previous.line),
+            TokenType::Nil => self.current_chunk().write_constant(Value::Nil, parser.previous.line),
             _ => return Err(eyre::eyre!("Unexpected type in literal expression")),
         }
         Ok(())

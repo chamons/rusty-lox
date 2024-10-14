@@ -5,6 +5,9 @@ use tracing::{debug, trace};
 
 use crate::bytecode::{Chunk, Instruction, Value};
 
+mod function;
+pub use function::Function;
+
 #[derive(Debug, Default)]
 pub struct VMSettings {
     pub capture_prints: bool,
