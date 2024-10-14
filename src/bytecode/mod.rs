@@ -28,6 +28,7 @@ pub enum Instruction {
     SetLocal { index: u32 },
     GetLocal { index: u32 },
     JumpIfFalse { offset: u32 },
+    Jump { offset: u32 },
 }
 
 impl Instruction {
@@ -61,7 +62,8 @@ impl Instruction {
             Instruction::SetGlobal { name_index } => f.write_fmt(format_args!("OP_SET_GLOBAL ({})", chunk.constant(*name_index as usize))),
             Instruction::SetLocal { index } => f.write_fmt(format_args!("OP_SET_LOCAL ({index})")),
             Instruction::GetLocal { index } => f.write_fmt(format_args!("OP_GET_LOCAL ({index})")),
-            Instruction::JumpIfFalse { offset } => f.write_fmt(format_args!("OP_JUST_IF_FALSE ({offset})")),
+            Instruction::JumpIfFalse { offset } => f.write_fmt(format_args!("OP_JUMP_IF_FALSE ({offset})")),
+            Instruction::Jump { offset } => f.write_fmt(format_args!("OP_JUMP ({offset})")),
         }
     }
 }

@@ -55,6 +55,10 @@ impl VM {
         }
     }
 
+    pub fn is_stack_empty(&self) -> bool {
+        self.stack.is_empty()
+    }
+
     fn pop(&mut self) -> Result<Value, InterpretErrors> {
         self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)
     }
@@ -203,6 +207,9 @@ impl VM {
                     if self.peek_falsey()? {
                         self.ip += *offset as usize;
                     }
+                }
+                Instruction::Jump { offset } => {
+                    self.ip += *offset as usize;
                 }
             }
         }
@@ -383,7 +390,22 @@ mod tests {
 
         chunk.write_constant(Value::Bool(false), 123);
 
-        let jump_offset = chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, 126);
+        let jump_offset = chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, 124);
+        chunk.write_constant(Value::Nil, 125);
+        chunk.write(Instruction::Print, 125);
+        chunk.patch_jump(jump_offset).unwrap();
+        chunk.write(Instruction::Pop, 124);
+
+        let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+        vm.interpret(&chunk).unwrap();
+        assert!(vm.captured_prints.is_empty());
+    }
+
+    #[test]
+    fn jumps() {
+        let mut chunk = Chunk::new();
+
+        let jump_offset = chunk.write_jump(Instruction::Jump { offset: 0 }, 126);
         chunk.write_constant(Value::Nil, 124);
         chunk.write(Instruction::Print, 124);
         chunk.patch_jump(jump_offset).unwrap();
@@ -391,5 +413,6 @@ mod tests {
         let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
         vm.interpret(&chunk).unwrap();
         assert!(vm.captured_prints.is_empty());
+        assert!(vm.stack.is_empty())
     }
 }

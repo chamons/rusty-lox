@@ -64,6 +64,10 @@ impl Chunk {
                 *offset = new_offset as u32;
                 Ok(())
             }
+            Instruction::Jump { offset } => {
+                *offset = new_offset as u32;
+                Ok(())
+            }
             i => Err(eyre::eyre!("Invalid instruction {i:?} found when trying to patch a jump")),
         }
     }

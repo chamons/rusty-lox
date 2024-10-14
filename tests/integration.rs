@@ -75,11 +75,39 @@ print x;",
     }",
     "1"
 )]
+#[case(
+    "var x = true;
+    if (x)
+    {
+        print 1;
+    }
+    else
+    {
+        print 2;
+    }",
+    "1"
+)]
+#[case(
+    "var x = false;
+    if (x)
+    {
+        print 1;
+    }
+    else
+    {
+        print 2;
+    }",
+    "2"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let chunk = compile(&source).unwrap();
+
+    println!("{chunk}");
+
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
     vm.interpret(&chunk).unwrap();
-
+    assert_eq!(1, vm.captured_prints.len());
     assert_eq!(expected, vm.captured_prints[0]);
+    assert!(vm.is_stack_empty());
 }

@@ -462,10 +462,20 @@ impl Compiler {
         self.expression(parser)?;
         self.consume(parser, TokenType::RightParen, "Expect ')' after condition.")?;
 
-        let jump_offset = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        let then_jump = self.chunk.write_jump(Instruction::JumpIfFalse { offset: 0 }, parser.previous.line);
+        self.chunk.write(Instruction::Pop, parser.previous.line);
         self.statement(parser)?;
 
-        self.chunk.patch_jump(jump_offset)?;
+        let else_jump = self.chunk.write_jump(Instruction::Jump { offset: 0 }, parser.previous.line);
+
+        self.chunk.patch_jump(then_jump)?;
+        self.chunk.write(Instruction::Pop, parser.previous.line);
+
+        if self.match_token(parser, TokenType::Else)? {
+            self.statement(parser)?;
+        }
+
+        self.chunk.patch_jump(else_jump)?;
 
         Ok(())
     }
