@@ -32,7 +32,7 @@ fn repl() -> eyre::Result<()> {
             }
         };
 
-        if let Err(err) = vm.interpret(&chunk) {
+        if let Err(err) = vm.interpret(chunk) {
             eprintln!("{err:?}")
         }
     }
@@ -42,9 +42,9 @@ fn run_file(path: String) -> eyre::Result<()> {
     let mut vm = VM::new();
 
     let source = fs::read_to_string(path)?;
-    let chunk = compile(&source)?;
+    let function = compile(&source)?;
 
-    Ok(vm.interpret(&chunk)?)
+    Ok(vm.interpret(function)?)
 }
 
 fn main() -> eyre::Result<()> {

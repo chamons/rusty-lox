@@ -6,7 +6,7 @@ pub use chunk::*;
 mod lines;
 pub use lines::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Instruction {
     Return,
     Constant { index: u8 },

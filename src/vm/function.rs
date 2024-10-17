@@ -11,6 +11,10 @@ impl Function {
     pub fn new() -> Self {
         Self::default()
     }
+
+    pub fn new_script(chunk: Chunk) -> Function {
+        Function { arity: 0, chunk, name: None }
+    }
 }
 
 impl std::fmt::Display for Function {

@@ -42,10 +42,10 @@ use rusty_lox::{
 #[case("false or true", "true")]
 #[case("false or false", "false")]
 fn end_to_end(#[case] source: String, #[case] expected: String) {
-    let chunk = compile(&format!("print {source};")).unwrap();
+    let function = compile(&format!("print {source};")).unwrap();
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
-    vm.interpret(&chunk).unwrap();
+    vm.interpret(function).unwrap();
 
     assert_eq!(expected, vm.captured_prints[0]);
 }
@@ -174,13 +174,13 @@ print x;",
     "10"
 )]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
-    let chunk = compile(&source).unwrap();
+    let function = compile(&source).unwrap();
 
-    // println!("{chunk}");
+    // println!("{function}");
 
     let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
 
-    vm.interpret(&chunk).unwrap();
+    vm.interpret(function).unwrap();
     assert_eq!(1, vm.captured_prints.len());
     assert_eq!(expected, vm.captured_prints[0]);
     assert!(vm.is_stack_empty());

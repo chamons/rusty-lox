@@ -17,9 +17,9 @@ use tokens::token::{Token, TokenType};
 pub mod parser;
 pub mod tokens;
 
-pub fn compile(source: &str) -> eyre::Result<Chunk> {
+pub fn compile(source: &str) -> eyre::Result<Function> {
     let mut compiler = Compiler::new();
-    compiler.compile(source).map(|f| f.chunk)
+    compiler.compile(source)
 }
 
 mod locals;

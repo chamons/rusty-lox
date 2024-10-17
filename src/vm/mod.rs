@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use thiserror::Error;
 use tracing::{debug, trace};
 
-use crate::bytecode::{Chunk, Instruction, Value};
+use crate::bytecode::{Instruction, Value};
 
+mod frame;
+pub use frame::Frame;
 mod function;
 pub use function::Function;
 
@@ -15,14 +17,14 @@ pub struct VMSettings {
 
 #[derive(Debug)]
 pub struct VM {
-    ip: usize,
-    stack: Vec<Value>,
     settings: VMSettings,
     globals: HashMap<String, Value>,
 
     // If capture_prints is set then do not print to stdout
     // store here (for integration testing and such)
     pub captured_prints: Vec<String>,
+
+    frames: Vec<Frame>,
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -50,8 +52,7 @@ impl VM {
 
     pub fn new_from_settings(settings: VMSettings) -> Self {
         VM {
-            ip: 0,
-            stack: vec![],
+            frames: vec![],
             globals: HashMap::new(),
             settings,
             captured_prints: vec![],
@@ -59,115 +60,98 @@ impl VM {
     }
 
     pub fn is_stack_empty(&self) -> bool {
-        self.stack.is_empty()
-    }
-
-    fn pop(&mut self) -> Result<Value, InterpretErrors> {
-        self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)
-    }
-
-    fn peek(&mut self) -> Result<&Value, InterpretErrors> {
-        self.stack.last().ok_or(InterpretErrors::PoppedEndOfStack)
-    }
-
-    fn pop_double(&mut self) -> Result<f64, InterpretErrors> {
-        let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
-        match value {
-            Value::Double(v) => Ok(v),
-            _ => Err(InterpretErrors::InvalidRuntimeType),
+        if let Some(frame) = self.frames.last() {
+            frame.stack.is_empty()
+        } else {
+            true
         }
     }
 
-    fn pop_falsey(&mut self) -> Result<bool, InterpretErrors> {
-        Ok(self.pop()?.is_falsey())
+    pub fn interpret(&mut self, function: Function) -> Result<(), InterpretErrors> {
+        self.interpret_frame(Frame::new(function))
     }
 
-    fn peek_falsey(&mut self) -> Result<bool, InterpretErrors> {
-        Ok(self.peek()?.is_falsey())
-    }
+    fn interpret_frame(&mut self, frame: Frame) -> Result<(), InterpretErrors> {
+        self.frames.push(frame);
 
-    fn fetch_constant_name(&mut self, chunk: &Chunk, index: usize) -> Result<String, InterpretErrors> {
-        match chunk.constant(index) {
-            Value::String(name) => Ok(name.clone()),
-            _ => Err(InterpretErrors::InvalidRuntimeType),
-        }
-    }
-
-    pub fn interpret(&mut self, chunk: &Chunk) -> Result<(), InterpretErrors> {
         loop {
-            let Some(instruction) = &chunk.code.get(self.ip) else {
+            let Some(frame) = self.frames.last_mut() else {
                 return Ok(());
             };
 
-            self.ip += 1;
+            let Some(instruction) = frame.next_instruction() else {
+                return Ok(());
+            };
 
-            trace!(?instruction, stack = ?self.stack, "Interpreting");
+            trace!(?instruction, frame = ?frame, "Interpreting");
 
             match instruction {
                 Instruction::Return => {}
                 Instruction::Constant { index } => {
-                    let constant = chunk.constant(*index as usize);
-                    self.stack.push(constant.clone());
+                    let constant = frame.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
+
+                    frame.push(constant);
                 }
                 Instruction::LongConstant { index } => {
-                    let constant = chunk.constant(*index as usize);
-                    self.stack.push(constant.clone());
+                    let constant = frame.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
+
+                    frame.push(constant);
                 }
                 Instruction::Negate => {
-                    let v = self.pop_double()?;
-                    self.stack.push(Value::Double(-v));
+                    let v = frame.pop_double()?;
+                    frame.push(Value::Double(-v));
                 }
                 Instruction::Add => {
-                    let b = self.pop()?;
-                    let a = self.pop()?;
+                    let b = frame.pop()?;
+                    let a = frame.pop()?;
                     match (a, b) {
                         (Value::Double(a), Value::Double(b)) => {
-                            self.stack.push(Value::Double(a + b));
+                            frame.push(Value::Double(a + b));
                         }
                         (Value::String(a), Value::String(b)) => {
-                            self.stack.push(Value::String(a + &b));
+                            frame.push(Value::String(a + &b));
                         }
                         _ => return Err(InterpretErrors::InvalidRuntimeType),
                     }
                 }
                 Instruction::Subtract => {
-                    let b = self.pop_double()?;
-                    let a = self.pop_double()?;
-                    self.stack.push(Value::Double(a - b));
+                    let b = frame.pop_double()?;
+                    let a = frame.pop_double()?;
+                    frame.push(Value::Double(a - b));
                 }
                 Instruction::Multiply => {
-                    let b = self.pop_double()?;
-                    let a = self.pop_double()?;
-                    self.stack.push(Value::Double(a * b));
+                    let b = frame.pop_double()?;
+                    let a = frame.pop_double()?;
+                    frame.push(Value::Double(a * b));
                 }
                 Instruction::Divide => {
-                    let b = self.pop_double()?;
-                    let a = self.pop_double()?;
-                    self.stack.push(Value::Double(a / b));
+                    let b = frame.pop_double()?;
+                    let a = frame.pop_double()?;
+                    frame.push(Value::Double(a / b));
                 }
                 Instruction::Not => {
-                    let a = self.pop_falsey()?;
-                    self.stack.push(Value::Bool(a));
+                    let a = frame.pop_falsey()?;
+                    frame.push(Value::Bool(a));
                 }
                 Instruction::Equal => {
-                    let a = self.pop()?;
-                    let b = self.pop()?;
-                    self.stack.push(Value::Bool(a == b));
+                    let a = frame.pop()?;
+                    let b = frame.pop()?;
+                    frame.push(Value::Bool(a == b));
                 }
                 Instruction::Greater => {
-                    let b = self.pop_double()?;
-                    let a = self.pop_double()?;
-                    self.stack.push(Value::Bool(a > b));
+                    let b = frame.pop_double()?;
+                    let a = frame.pop_double()?;
+                    frame.push(Value::Bool(a > b));
                 }
                 Instruction::Less => {
-                    let b = self.pop_double()?;
-                    let a = self.pop_double()?;
-                    self.stack.push(Value::Bool(a < b));
+                    let b = frame.pop_double()?;
+                    let a = frame.pop_double()?;
+                    frame.push(Value::Bool(a < b));
                 }
                 Instruction::Print => {
-                    let a = self.pop()?;
+                    let a = frame.pop()?;
                     if self.settings.capture_prints {
                         self.captured_prints.push(format!("{a}"));
                     } else {
@@ -175,47 +159,47 @@ impl VM {
                     }
                 }
                 Instruction::Pop => {
-                    let _ = self.pop()?;
+                    let _ = frame.pop()?;
                 }
                 Instruction::DefineGlobal { name_index } => {
-                    let name = self.fetch_constant_name(chunk, *name_index as usize)?;
-                    let value = self.pop()?;
+                    let name = frame.fetch_constant_name(name_index as usize)?;
+                    let value = frame.pop()?;
                     self.globals.insert(name, value);
                 }
                 Instruction::FetchGlobal { name_index } => {
-                    let name = self.fetch_constant_name(chunk, *name_index as usize)?;
+                    let name = frame.fetch_constant_name(name_index as usize)?;
                     match self.globals.get(&name) {
                         Some(value) => {
-                            self.stack.push(value.clone());
+                            frame.push(value.clone());
                         }
                         None => return Err(InterpretErrors::UndefinedVariable(name)),
                     }
                 }
                 Instruction::SetGlobal { name_index } => {
-                    let name = self.fetch_constant_name(chunk, *name_index as usize)?;
+                    let name = frame.fetch_constant_name(name_index as usize)?;
                     if !self.globals.contains_key(&name) {
                         return Err(InterpretErrors::UndefinedVariable(name));
                     }
-                    let value = self.peek()?.clone();
+                    let value = frame.peek()?.clone();
                     self.globals.insert(name, value);
                 }
                 Instruction::SetLocal { index } => {
-                    let value = self.peek()?.clone();
-                    self.stack[*index as usize] = value;
+                    let value = frame.peek()?.clone();
+                    frame.stack[index as usize] = value;
                 }
                 Instruction::GetLocal { index } => {
-                    self.stack.push(self.stack[*index as usize].clone());
+                    frame.stack.push(frame.stack[index as usize].clone());
                 }
                 Instruction::JumpIfFalse { offset } => {
-                    if self.peek_falsey()? {
-                        self.ip += *offset as usize;
+                    if frame.peek_falsey()? {
+                        frame.ip += offset as usize;
                     }
                 }
                 Instruction::Jump { offset } => {
-                    self.ip += *offset as usize;
+                    frame.ip += offset as usize;
                 }
                 Instruction::JumpBack { offset } => {
-                    self.ip -= *offset as usize;
+                    frame.ip -= offset as usize;
                 }
             }
         }
@@ -228,10 +212,10 @@ mod tests {
 
     use crate::{
         bytecode::{Chunk, Instruction, Value},
-        vm::InterpretErrors,
+        vm::{Frame, InterpretErrors},
     };
 
-    use super::{VMSettings, VM};
+    use super::{Function, VMSettings, VM};
 
     #[test]
     fn executes_return_zero() {
@@ -239,8 +223,10 @@ mod tests {
         chunk.write_constant(Value::Double(1.2), 123);
         chunk.write(Instruction::Return, 123);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
-        vm.interpret(&chunk).unwrap();
+        vm.interpret(function).unwrap();
     }
 
     #[test]
@@ -254,9 +240,11 @@ mod tests {
         chunk.write(Instruction::Negate, 123);
         chunk.write(Instruction::Return, 125);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
-        vm.interpret(&chunk).unwrap();
-        assert_eq!(vm.stack[0], Value::Double(-0.8214285714285714));
+        vm.interpret(function).unwrap();
+        assert_eq!(vm.frames[0].stack[0], Value::Double(-0.8214285714285714));
     }
 
     #[rstest]
@@ -267,9 +255,11 @@ mod tests {
         chunk.write_constant(Value::Bool(input), 123);
         chunk.write(Instruction::Not, 123);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
-        vm.interpret(&chunk).unwrap();
-        assert_eq!(vm.stack[0], Value::Bool(!input));
+        vm.interpret(function).unwrap();
+        assert_eq!(vm.frames[0].stack[0], Value::Bool(!input));
     }
 
     #[test]
@@ -278,9 +268,11 @@ mod tests {
         chunk.write_constant(Value::Nil, 123);
         chunk.write(Instruction::Not, 123);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
-        vm.interpret(&chunk).unwrap();
-        assert_eq!(vm.stack[0], Value::Bool(true));
+        vm.interpret(function).unwrap();
+        assert_eq!(vm.frames[0].stack[0], Value::Bool(true));
     }
 
     #[test]
@@ -290,8 +282,10 @@ mod tests {
         chunk.write_constant(Value::Double(1.2), 123);
         chunk.write(Instruction::Add, 123);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
-        assert!(vm.interpret(&chunk).is_err());
+        assert!(vm.interpret(function).is_err());
     }
 
     #[test]
@@ -303,30 +297,18 @@ mod tests {
     }
 
     #[test]
-    fn falsey() {
-        let mut vm = VM::new();
-        vm.stack.push(Value::Double(1.2));
-        vm.stack.push(Value::Double(0.0));
-        vm.stack.push(Value::Nil);
-        vm.stack.push(Value::Bool(true));
-        vm.stack.push(Value::Bool(false));
-        assert!(vm.pop_falsey().unwrap());
-        assert!(!vm.pop_falsey().unwrap());
-        assert!(vm.pop_falsey().unwrap());
-        assert!(!vm.pop_falsey().unwrap());
-        assert!(!vm.pop_falsey().unwrap());
-    }
-
-    #[test]
     fn globals_write() {
         let mut chunk = Chunk::new();
 
         let name_index = chunk.make_constant(Value::String("asdf".to_string()));
         chunk.write(Instruction::DefineGlobal { name_index }, 123);
 
+        let function = Function::new_script(chunk);
+        let mut frame = Frame::new(function);
+        frame.stack.push(Value::Double(42.0));
+
         let mut vm = VM::new();
-        vm.stack.push(Value::Double(42.0));
-        vm.interpret(&chunk).unwrap();
+        vm.interpret_frame(frame).unwrap();
         assert_eq!(vm.globals["asdf"], Value::Double(42.0));
     }
 
@@ -337,10 +319,12 @@ mod tests {
         let name_index = chunk.make_constant(Value::String("asdf".to_string()));
         chunk.write(Instruction::FetchGlobal { name_index }, 123);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
         vm.globals.insert("asdf".to_string(), Value::Double(42.0));
-        vm.interpret(&chunk).unwrap();
-        assert_eq!(vm.pop().unwrap(), Value::Double(42.0));
+        vm.interpret(function).unwrap();
+        assert_eq!(vm.frames[0].pop().unwrap(), Value::Double(42.0));
     }
 
     #[test]
@@ -350,8 +334,10 @@ mod tests {
         let name_index = chunk.make_constant(Value::String("asdf".to_string()));
         chunk.write(Instruction::SetGlobal { name_index }, 123);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new();
-        assert_eq!(vm.interpret(&chunk), Err(InterpretErrors::UndefinedVariable("asdf".to_string())));
+        assert_eq!(vm.interpret(function), Err(InterpretErrors::UndefinedVariable("asdf".to_string())));
     }
 
     #[test]
@@ -362,12 +348,16 @@ mod tests {
         chunk.write(Instruction::DefineGlobal { name_index }, 123);
         chunk.write(Instruction::SetGlobal { name_index }, 123);
 
+        let function = Function::new_script(chunk);
+        let mut frame = Frame::new(function);
+
+        frame.stack.push(Value::Double(12.0));
+        frame.stack.push(Value::Double(42.0));
+
         let mut vm = VM::new();
-        vm.stack.push(Value::Double(12.0));
-        vm.stack.push(Value::Double(42.0));
-        vm.interpret(&chunk).unwrap();
+        vm.interpret_frame(frame).unwrap();
         assert_eq!(*vm.globals.get(&"asdf".to_string()).unwrap(), Value::Double(12.0));
-        assert_eq!(1, vm.stack.len());
+        assert_eq!(1, vm.frames[0].stack.len());
     }
 
     #[test]
@@ -378,16 +368,21 @@ mod tests {
         chunk.write(Instruction::Pop, 123);
         chunk.write(Instruction::GetLocal { index: 0 }, 123);
 
-        let mut vm = VM::new();
-        // The starting value of our local
-        vm.stack.push(Value::Double(42.0));
-        // The new value
-        vm.stack.push(Value::Double(12.0));
-        vm.interpret(&chunk).unwrap();
+        let function = Function::new_script(chunk);
 
-        assert_eq!(2, vm.stack.len());
-        assert_eq!(Value::Double(12.0), vm.stack[0]);
-        assert_eq!(Value::Double(12.0), vm.stack[1]);
+        let mut frame = Frame::new(function);
+        // The starting value of our local
+        frame.stack.push(Value::Double(42.0));
+        // The new value
+        frame.stack.push(Value::Double(12.0));
+
+        let mut vm = VM::new();
+
+        vm.interpret_frame(frame).unwrap();
+
+        assert_eq!(2, vm.frames[0].stack.len());
+        assert_eq!(Value::Double(12.0), vm.frames[0].stack[0]);
+        assert_eq!(Value::Double(12.0), vm.frames[0].stack[1]);
     }
 
     #[test]
@@ -402,8 +397,10 @@ mod tests {
         chunk.patch_jump(jump_offset).unwrap();
         chunk.write(Instruction::Pop, 124);
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
-        vm.interpret(&chunk).unwrap();
+        vm.interpret(function).unwrap();
         assert!(vm.captured_prints.is_empty());
     }
 
@@ -416,9 +413,11 @@ mod tests {
         chunk.write(Instruction::Print, 124);
         chunk.patch_jump(jump_offset).unwrap();
 
+        let function = Function::new_script(chunk);
+
         let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
-        vm.interpret(&chunk).unwrap();
+        vm.interpret(function).unwrap();
         assert!(vm.captured_prints.is_empty());
-        assert!(vm.stack.is_empty())
+        assert!(vm.is_stack_empty())
     }
 }
