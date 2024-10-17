@@ -1,10 +1,12 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 mod chunk;
 pub use chunk::*;
 
 mod lines;
 pub use lines::*;
+
+use crate::vm::Function;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Instruction {
@@ -76,6 +78,7 @@ pub enum Value {
     Bool(bool),
     Nil,
     String(String),
+    Function(Arc<Function>),
 }
 
 impl Value {
@@ -84,6 +87,7 @@ impl Value {
             Value::Double(_) | Value::String(_) => false,
             Value::Bool(v) => !v,
             Value::Nil => true,
+            Value::Function(_) => false,
         }
     }
 }
@@ -95,6 +99,7 @@ impl Display for Value {
             Value::Bool(v) => f.write_fmt(format_args!("{v}")),
             Value::Nil => f.write_fmt(format_args!("nil")),
             Value::String(v) => f.write_fmt(format_args!("{v}")),
+            Value::Function(v) => f.write_fmt(format_args!("{v}")),
         }
     }
 }

@@ -173,6 +173,42 @@ print x;",
     print value;",
     "10"
 )]
+// #[case(
+//     "
+// fun first() {
+//   var a = 1;
+//   second();
+//   var b = 2;
+// }
+
+// fun second() {
+//   var c = 3;
+//   var d = 4;
+//   print d;
+// }
+
+// first();
+// ",
+//     "4"
+// )]
+// #[case(
+//     "fun first() {
+//   var a = 1;
+//   second();
+//   var b = 2;
+//   second();
+//   print b;
+// }
+
+// fun second() {
+//   var c = 3;
+//   var d = 4;
+// }
+
+// first();
+// ",
+//     "2"
+// )]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let function = compile(&source).unwrap();
 

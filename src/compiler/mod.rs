@@ -232,8 +232,13 @@ impl Compiler {
             Err(errors.into())
         } else {
             info!(chunk = %self.function, "Compiled function");
-            Ok(std::mem::take(&mut self.function))
+            self.end_compile(&mut parser)
         }
+    }
+
+    fn end_compile(&mut self, parser: &mut Parser) -> eyre::Result<Function> {
+        self.function.chunk.write(Instruction::Return, parser.current.line);
+        Ok(std::mem::take(&mut self.function))
     }
 
     pub fn current_chunk(&mut self) -> &mut Chunk {
@@ -353,11 +358,36 @@ impl Compiler {
     }
 
     fn declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        if self.match_token(parser, TokenType::Var)? {
+        if self.match_token(parser, TokenType::Fun)? {
+            self.fun_declaration(parser)
+        } else if self.match_token(parser, TokenType::Var)? {
             self.variable_declaration(parser)
         } else {
             self.statement(parser)
         }
+    }
+
+    fn function(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        let mut compiler = Compiler::new();
+        compiler.begin_scope();
+        compiler.consume(parser, TokenType::LeftParen, "Expect '(' after function name.")?;
+        compiler.consume(parser, TokenType::RightParen, "Expect ')' after parameters.")?;
+        compiler.consume(parser, TokenType::LeftParen, "Expect '{' before function body.")?;
+        compiler.block(parser)?;
+
+        let function = compiler.end_compile(parser)?;
+        self.current_chunk()
+            .write_constant(Value::Function(std::sync::Arc::new(function)), parser.previous.line);
+
+        Ok(())
+    }
+
+    fn fun_declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        let variable_info = self.parse_variable(parser)?;
+        self.mark_initialized();
+        self.function(parser)?;
+        self.define_variable(parser, &variable_info)?;
+        Ok(())
     }
 
     fn variable_declaration(&mut self, parser: &mut Parser) -> eyre::Result<()> {
