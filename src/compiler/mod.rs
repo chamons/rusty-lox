@@ -400,6 +400,8 @@ impl Compiler {
             _ => Err(eyre::eyre!("Unable to find function name defined")),
         }?;
 
+        // NOTE - Everything after this point must be compiler.Foo
+        // not self.foo until we are done driving the sub-compiler
         let mut compiler = Compiler::new_for_function(function_name);
 
         compiler.begin_scope();
@@ -412,6 +414,8 @@ impl Compiler {
                     return Err(eyre::eyre!("Can't have more than 255 parameters."));
                 }
                 let variable_info = compiler.parse_variable(parser)?;
+                compiler.declare_variable(&variable_info)?;
+
                 compiler.define_variable(parser, &variable_info)?;
                 if !compiler.match_token(parser, TokenType::Comma)? {
                     break;
@@ -793,6 +797,8 @@ impl Compiler {
 mod tests {
     use rstest::rstest;
 
+    use crate::bytecode::{Instruction, Value};
+
     use super::Compiler;
 
     #[rstest]
@@ -865,5 +871,25 @@ mod tests {
 }",
             )
             .is_err());
+    }
+
+    #[test]
+    fn local_function_arg() {
+        let mut compiler = Compiler::new();
+        let function = compiler
+            .compile(
+                "fun second(b) {
+  var c = 3;
+  var d = 4;
+  print b;
+}
+",
+            )
+            .unwrap();
+        let second = match function.chunk.constant(1) {
+            Value::Function(second) => second,
+            _ => panic!(),
+        };
+        assert!(matches!(second.chunk.code[2], Instruction::GetLocal { index: 0 }));
     }
 }
