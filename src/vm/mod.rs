@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use thiserror::Error;
 use tracing::{debug, trace};
@@ -13,6 +13,16 @@ pub use function::Function;
 #[derive(Debug, Default)]
 pub struct VMSettings {
     pub capture_prints: bool,
+    pub skip_error_stacktrace: bool,
+}
+
+impl VMSettings {
+    pub fn test_default() -> Self {
+        VMSettings {
+            capture_prints: true,
+            skip_error_stacktrace: true,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -38,6 +48,9 @@ pub enum InterpretErrors {
 
     #[error("Undefined variable: {0}")]
     UndefinedVariable(String),
+
+    #[error("Incorrect number of arguments (expected {0}, received {1})")]
+    IncorrectArgumentCount(u32, u32),
 }
 
 impl Default for VM {
@@ -94,7 +107,19 @@ impl VM {
     }
 
     pub fn interpret(&mut self, function: Function) -> Result<(), InterpretErrors> {
-        self.interpret_frame(Frame::new(function))
+        let function = Arc::new(function);
+        match self.interpret_frame(Frame::new(function.clone())) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                eprintln!("{err}");
+                for frame in self.frames.iter().rev() {
+                    let location = function.name.as_deref().unwrap_or("script");
+                    println!("[line {}] in {location}", frame.function.chunk.line(frame.ip as u32 - 1));
+                }
+
+                Err(err)
+            }
+        }
     }
 
     fn interpret_frame(&mut self, starting_frame: Frame) -> Result<(), InterpretErrors> {
@@ -234,7 +259,25 @@ impl VM {
                     current_frame.ip -= offset as usize;
                 }
                 Instruction::Call { arg_count } => {
-                    todo!()
+                    let function = self
+                        .stack
+                        .get(self.stack.len() - arg_count as usize - 1)
+                        .ok_or(InterpretErrors::PoppedEndOfStack)?;
+
+                    let function = match function {
+                        Value::Function(v) => Ok(v),
+                        _ => Err(InterpretErrors::InvalidRuntimeType),
+                    }?;
+
+                    if function.arity != arg_count {
+                        return Err(InterpretErrors::IncorrectArgumentCount(function.arity, arg_count));
+                    }
+
+                    self.frames.push(Frame {
+                        function: function.clone(),
+                        ip: 0,
+                        stack_offset: arg_count as usize,
+                    });
                 }
             }
         }
@@ -243,6 +286,8 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use rstest::rstest;
 
     use crate::{
@@ -355,7 +400,7 @@ mod tests {
         chunk.write(Instruction::DefineGlobal { name_index }, 123);
 
         let function = Function::new_script(chunk);
-        let frame = Frame::new(function);
+        let frame = Frame::new(Arc::new(function));
 
         let mut vm = VM::new();
         vm.stack.push(Value::Double(42.0));
@@ -401,7 +446,7 @@ mod tests {
         chunk.write(Instruction::SetGlobal { name_index }, 123);
 
         let function = Function::new_script(chunk);
-        let frame = Frame::new(function);
+        let frame = Frame::new(Arc::new(function));
 
         let mut vm = VM::new();
         vm.stack.push(Value::Double(12.0));
@@ -422,7 +467,7 @@ mod tests {
 
         let function = Function::new_script(chunk);
 
-        let frame = Frame::new(function);
+        let frame = Frame::new(Arc::new(function));
 
         let mut vm = VM::new();
         // The starting value of our local
@@ -449,7 +494,7 @@ mod tests {
 
         let mut vm = VM::new();
 
-        let mut frame = Frame::new(function);
+        let mut frame = Frame::new(Arc::new(function));
         frame.stack_offset = 1;
 
         // This is the variable from the previous frame
@@ -482,7 +527,7 @@ mod tests {
 
         let function = Function::new_script(chunk);
 
-        let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+        let mut vm = VM::new_from_settings(VMSettings::test_default());
         vm.interpret(function).unwrap();
         assert!(vm.captured_prints.is_empty());
     }
@@ -498,9 +543,76 @@ mod tests {
 
         let function = Function::new_script(chunk);
 
-        let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+        let mut vm = VM::new_from_settings(VMSettings::test_default());
         vm.interpret(function).unwrap();
         assert!(vm.captured_prints.is_empty());
         assert!(vm.is_stack_empty())
+    }
+
+    #[test]
+    fn calls() {
+        let inner_chunk = {
+            let mut chunk = Chunk::new();
+            chunk.write(Instruction::GetLocal { index: 0 }, 100);
+            chunk.write(Instruction::Print, 101);
+            chunk
+        };
+
+        let mut chunk = Chunk::new();
+        chunk.write_constant(
+            Value::Function(Arc::new(Function {
+                arity: 1,
+                chunk: inner_chunk,
+                name: Some("f".to_string()),
+            })),
+            124,
+        );
+        chunk.write_constant(Value::Double(42.2), 123);
+        chunk.write(Instruction::GetLocal { index: 0 }, 123);
+        chunk.write(Instruction::GetLocal { index: 1 }, 123);
+        chunk.write(Instruction::Call { arg_count: 1 }, 124);
+
+        let mut vm = VM::new_from_settings(VMSettings::test_default());
+        vm.interpret(Function {
+            arity: 0,
+            chunk: chunk,
+            name: None,
+        })
+        .unwrap();
+        assert_eq!("42.2", vm.captured_prints[0]);
+        println!("{:?}", vm.stack);
+        assert!(vm.is_stack_empty())
+    }
+
+    #[test]
+    fn calls_wrong_arguments() {
+        let inner_chunk = {
+            let mut chunk = Chunk::new();
+            chunk.write(Instruction::GetLocal { index: 0 }, 100);
+            chunk.write(Instruction::Print, 101);
+            chunk
+        };
+
+        let mut chunk = Chunk::new();
+        chunk.write_constant(
+            Value::Function(Arc::new(Function {
+                arity: 1,
+                chunk: inner_chunk,
+                name: Some("f".to_string()),
+            })),
+            124,
+        );
+        chunk.write(Instruction::GetLocal { index: 0 }, 123);
+        chunk.write(Instruction::Call { arg_count: 0 }, 124);
+
+        let mut vm = VM::new_from_settings(VMSettings::test_default());
+        let error = vm
+            .interpret(Function {
+                arity: 0,
+                chunk: chunk,
+                name: None,
+            })
+            .unwrap_err();
+        assert_eq!(InterpretErrors::IncorrectArgumentCount(1, 0), error);
     }
 }

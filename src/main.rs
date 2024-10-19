@@ -44,7 +44,8 @@ fn run_file(path: String) -> eyre::Result<()> {
     let source = fs::read_to_string(path)?;
     let function = compile(&source)?;
 
-    Ok(vm.interpret(function)?)
+    let _ = vm.interpret(function);
+    Ok(())
 }
 
 fn main() -> eyre::Result<()> {

@@ -1,7 +1,7 @@
 use rstest::rstest;
 use rusty_lox::{
     compiler::compile,
-    vm::{VMSettings, VM},
+    vm::{InterpretErrors, VMSettings, VM},
 };
 
 #[rstest]
@@ -43,7 +43,7 @@ use rusty_lox::{
 #[case("false or false", "false")]
 fn end_to_end(#[case] source: String, #[case] expected: String) {
     let function = compile(&format!("print {source};")).unwrap();
-    let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+    let mut vm = VM::new_from_settings(VMSettings::test_default());
 
     vm.interpret(function).unwrap();
 
@@ -178,32 +178,54 @@ print x;",
     print f;",
     "Function f"
 )]
-// #[case(
-//     "fun first() {
-//   var a = 1;
-//   var b = 2;
-//   second(b);
-// }
+#[case(
+    "fun first() {
+  var a = 1;
+  var b = 2;
+  second(b);
+}
 
-// fun second(b) {
-//   var c = 3;
-//   var d = 4;
-//   print b;
-// }
+fun second(b) {
+  var c = 3;
+  var d = 4;
+  print b;
+}
 
-// first();
-// ",
-//     "2"
-// )]
+first();
+",
+    "2"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     let function = compile(&source).unwrap();
 
-    println!("{}", function.chunk);
+    // println!("{}", function.chunk);
 
-    let mut vm = VM::new_from_settings(VMSettings { capture_prints: true });
+    let mut vm = VM::new_from_settings(VMSettings::test_default());
 
     vm.interpret(function).unwrap();
     assert_eq!(1, vm.captured_prints.len());
     assert_eq!(expected, vm.captured_prints[0]);
     assert!(vm.is_stack_empty());
+}
+
+#[rstest]
+#[case(
+    "var notAFunction = 123;
+notAFunction();",
+    InterpretErrors::InvalidRuntimeType
+)]
+#[case(
+    "fun f(a) {}
+f();",
+    InterpretErrors::IncorrectArgumentCount(1, 0)
+)]
+fn small_programs_that_error(#[case] source: String, #[case] expected_error: InterpretErrors) {
+    let function = compile(&source).unwrap();
+
+    // println!("{}", function.chunk);
+
+    let mut vm = VM::new_from_settings(VMSettings::test_default());
+
+    let runtime_error = vm.interpret(function).unwrap_err();
+    assert_eq!(runtime_error, expected_error);
 }

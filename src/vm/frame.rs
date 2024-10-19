@@ -1,16 +1,18 @@
+use std::sync::Arc;
+
 use crate::bytecode::{Instruction, Value};
 
 use super::{Function, InterpretErrors};
 
 #[derive(Debug, Default)]
 pub struct Frame {
-    pub function: Function,
+    pub function: Arc<Function>,
     pub ip: usize,
     pub stack_offset: usize,
 }
 
 impl Frame {
-    pub fn new(function: Function) -> Self {
+    pub fn new(function: Arc<Function>) -> Self {
         {
             Self {
                 function,
