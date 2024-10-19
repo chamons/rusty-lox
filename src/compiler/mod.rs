@@ -242,6 +242,7 @@ impl Compiler {
     }
 
     fn end_compile(&mut self, parser: &mut Parser) -> eyre::Result<Function> {
+        self.function.chunk.write_constant(Value::Nil, parser.current.line);
         self.function.chunk.write(Instruction::Return, parser.current.line);
         Ok(std::mem::take(&mut self.function))
     }

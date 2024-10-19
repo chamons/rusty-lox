@@ -195,10 +195,17 @@ first();
 ",
     "2"
 )]
+#[case(
+    "fun noReturn() {}
+print noReturn();",
+    "nil"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
+    println!("{}", source);
+
     let function = compile(&source).unwrap();
 
-    // println!("{}", function.chunk);
+    println!("{}", function.chunk);
 
     let mut vm = VM::new_from_settings(VMSettings::test_default());
 

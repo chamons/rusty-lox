@@ -137,7 +137,18 @@ impl VM {
             trace!(?instruction, frame = ?current_frame, "Interpreting");
 
             match instruction {
-                Instruction::Return => {}
+                Instruction::Return => {
+                    let stack_offset = current_frame.stack_offset;
+
+                    let result = self.pop()?;
+                    self.frames.pop();
+                    if self.frames.is_empty() {
+                        // self.pop()?;
+                        return Ok(());
+                    }
+                    self.stack.truncate(stack_offset - 1);
+                    self.push(result);
+                }
                 Instruction::Constant { index } => {
                     let constant = current_frame.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
@@ -276,7 +287,7 @@ impl VM {
                     self.frames.push(Frame {
                         function: function.clone(),
                         ip: 0,
-                        stack_offset: arg_count as usize,
+                        stack_offset: self.stack.len() - arg_count as usize,
                     });
                 }
             }
@@ -334,7 +345,8 @@ mod tests {
         chunk.write_constant(Value::Double(5.6), 123);
         chunk.write(Instruction::Divide, 123);
         chunk.write(Instruction::Negate, 123);
-        chunk.write(Instruction::Return, 125);
+        // No writing return so we can inspect result
+        // chunk.write(Instruction::Return, 125);
 
         let function = Function::new_script(chunk);
 
@@ -555,6 +567,7 @@ mod tests {
             let mut chunk = Chunk::new();
             chunk.write(Instruction::GetLocal { index: 0 }, 100);
             chunk.write(Instruction::Print, 101);
+            chunk.write(Instruction::Return, 101);
             chunk
         };
 
@@ -568,9 +581,8 @@ mod tests {
             124,
         );
         chunk.write_constant(Value::Double(42.2), 123);
-        chunk.write(Instruction::GetLocal { index: 0 }, 123);
-        chunk.write(Instruction::GetLocal { index: 1 }, 123);
         chunk.write(Instruction::Call { arg_count: 1 }, 124);
+        chunk.write(Instruction::Return, 125);
 
         let mut vm = VM::new_from_settings(VMSettings::test_default());
         vm.interpret(Function {
@@ -580,6 +592,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!("42.2", vm.captured_prints[0]);
+
         println!("{:?}", vm.stack);
         assert!(vm.is_stack_empty())
     }
@@ -590,6 +603,8 @@ mod tests {
             let mut chunk = Chunk::new();
             chunk.write(Instruction::GetLocal { index: 0 }, 100);
             chunk.write(Instruction::Print, 101);
+            chunk.write_constant(Value::Nil, 101);
+            chunk.write(Instruction::Return, 101);
             chunk
         };
 
