@@ -69,7 +69,7 @@ impl VM {
         self.stack.push(value);
     }
 
-    pub fn peek(&mut self) -> Result<&Value, InterpretErrors> {
+    pub fn peek(&self) -> Result<&Value, InterpretErrors> {
         self.stack.last().ok_or(InterpretErrors::PoppedEndOfStack)
     }
 
@@ -85,7 +85,7 @@ impl VM {
         Ok(self.pop()?.is_falsey())
     }
 
-    pub fn peek_falsey(&mut self) -> Result<bool, InterpretErrors> {
+    pub fn peek_falsey(&self) -> Result<bool, InterpretErrors> {
         Ok(self.peek()?.is_falsey())
     }
 
@@ -97,63 +97,30 @@ impl VM {
         self.interpret_frame(Frame::new(function))
     }
 
-    fn current_frame(&self) -> Option<&Frame> {
-        self.frames.last()
-    }
-
-    fn current_frame_mut(&mut self) -> Option<&mut Frame> {
-        self.frames.last_mut()
-    }
-
-    fn move_to_next_instruction(&mut self) -> Option<Instruction> {
-        self.current_frame_mut()?.next_instruction()
-    }
-
-    // TODO - Get rid of these
-    pub fn constant(&self, index: usize) -> Value {
-        // This unwrap is safe as we do not process constants without having an instruction
-        // and thus a frame
-        self.current_frame().unwrap().constant(index)
-    }
-
-    pub fn fetch_constant_name(&self, index: usize) -> Result<String, InterpretErrors> {
-        // This unwrap is safe as we do not process constants without having an instruction
-        // and thus a frame
-        self.current_frame().unwrap().fetch_constant_name(index)
-    }
-
-    pub fn frame_stack_offset(&self) -> usize {
-        // This unwrap is safe as we do not process constants without having an instruction
-        // and thus a frame
-        self.current_frame().unwrap().stack_offset
-    }
-
-    fn current_ip_mut(&mut self) -> &mut usize {
-        // This unwrap is safe as we do not process constants without having an instruction
-        // and thus a frame
-        &mut self.current_frame_mut().unwrap().ip
-    }
-
     fn interpret_frame(&mut self, starting_frame: Frame) -> Result<(), InterpretErrors> {
         self.frames.push(starting_frame);
 
         loop {
-            let Some(instruction) = self.move_to_next_instruction() else {
+            let Some(current_frame) = self.frames.last_mut() else {
                 return Ok(());
             };
 
-            trace!(?instruction, frame = ?self.current_frame(), "Interpreting");
+            let Some(instruction) = current_frame.next_instruction().clone() else {
+                return Ok(());
+            };
+
+            trace!(?instruction, frame = ?current_frame, "Interpreting");
 
             match instruction {
                 Instruction::Return => {}
                 Instruction::Constant { index } => {
-                    let constant = self.constant(index as usize);
+                    let constant = current_frame.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
 
                     self.push(constant);
                 }
                 Instruction::LongConstant { index } => {
-                    let constant = self.constant(index as usize);
+                    let constant = current_frame.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
 
                     self.push(constant);
@@ -221,12 +188,12 @@ impl VM {
                     let _ = self.pop()?;
                 }
                 Instruction::DefineGlobal { name_index } => {
-                    let name = self.fetch_constant_name(name_index as usize)?;
+                    let name = current_frame.fetch_constant_name(name_index as usize)?;
                     let value = self.pop()?;
                     self.globals.insert(name, value);
                 }
                 Instruction::FetchGlobal { name_index } => {
-                    let name = self.fetch_constant_name(name_index as usize)?;
+                    let name = current_frame.fetch_constant_name(name_index as usize)?;
                     match self.globals.get(&name) {
                         Some(value) => {
                             self.push(value.clone());
@@ -235,7 +202,7 @@ impl VM {
                     }
                 }
                 Instruction::SetGlobal { name_index } => {
-                    let name = self.fetch_constant_name(name_index as usize)?;
+                    let name = current_frame.fetch_constant_name(name_index as usize)?;
                     if !self.globals.contains_key(&name) {
                         return Err(InterpretErrors::UndefinedVariable(name));
                     }
@@ -243,25 +210,28 @@ impl VM {
                     self.globals.insert(name, value);
                 }
                 Instruction::SetLocal { index } => {
+                    let frame_stack_offset = current_frame.stack_offset;
                     let value = self.peek()?.clone();
-                    let frame_stack_offset = self.frame_stack_offset();
                     self.stack[frame_stack_offset + index as usize] = value;
                 }
                 Instruction::GetLocal { index } => {
-                    let frame_stack_offset = self.frame_stack_offset();
+                    let frame_stack_offset = current_frame.stack_offset;
                     let value = self.stack[frame_stack_offset + index as usize].clone();
                     self.stack.push(value);
                 }
                 Instruction::JumpIfFalse { offset } => {
                     if self.peek_falsey()? {
-                        *self.current_ip_mut() += offset as usize;
+                        // We can not use current_frame as we have to borrow
+                        // self and would get double borrow
+                        // so refetch current frame
+                        self.frames.last_mut().unwrap().ip += offset as usize;
                     }
                 }
                 Instruction::Jump { offset } => {
-                    *self.current_ip_mut() += offset as usize;
+                    current_frame.ip += offset as usize;
                 }
                 Instruction::JumpBack { offset } => {
-                    *self.current_ip_mut() -= offset as usize;
+                    current_frame.ip -= offset as usize;
                 }
                 Instruction::Call { arg_count } => {
                     todo!()
