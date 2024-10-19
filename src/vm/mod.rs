@@ -19,6 +19,7 @@ pub struct VMSettings {
 pub struct VM {
     settings: VMSettings,
     globals: HashMap<String, Value>,
+    stack: Vec<Value>,
 
     // If capture_prints is set then do not print to stdout
     // store here (for integration testing and such)
@@ -53,105 +54,156 @@ impl VM {
     pub fn new_from_settings(settings: VMSettings) -> Self {
         VM {
             frames: vec![],
+            stack: vec![],
             globals: HashMap::new(),
             settings,
             captured_prints: vec![],
         }
     }
 
-    pub fn is_stack_empty(&self) -> bool {
-        if let Some(frame) = self.frames.last() {
-            frame.stack.is_empty()
-        } else {
-            true
+    pub fn pop(&mut self) -> Result<Value, InterpretErrors> {
+        self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)
+    }
+
+    pub fn push(&mut self, value: Value) {
+        self.stack.push(value);
+    }
+
+    pub fn peek(&mut self) -> Result<&Value, InterpretErrors> {
+        self.stack.last().ok_or(InterpretErrors::PoppedEndOfStack)
+    }
+
+    pub fn pop_double(&mut self) -> Result<f64, InterpretErrors> {
+        let value = self.stack.pop().ok_or(InterpretErrors::PoppedEndOfStack)?;
+        match value {
+            Value::Double(v) => Ok(v),
+            _ => Err(InterpretErrors::InvalidRuntimeType),
         }
+    }
+
+    pub fn pop_falsey(&mut self) -> Result<bool, InterpretErrors> {
+        Ok(self.pop()?.is_falsey())
+    }
+
+    pub fn peek_falsey(&mut self) -> Result<bool, InterpretErrors> {
+        Ok(self.peek()?.is_falsey())
+    }
+
+    pub fn is_stack_empty(&self) -> bool {
+        self.stack.is_empty()
     }
 
     pub fn interpret(&mut self, function: Function) -> Result<(), InterpretErrors> {
         self.interpret_frame(Frame::new(function))
     }
 
-    fn interpret_frame(&mut self, frame: Frame) -> Result<(), InterpretErrors> {
-        self.frames.push(frame);
+    fn current_frame(&self) -> Option<&Frame> {
+        self.frames.last()
+    }
+
+    fn current_frame_mut(&mut self) -> Option<&mut Frame> {
+        self.frames.last_mut()
+    }
+
+    fn move_to_next_instruction(&mut self) -> Option<Instruction> {
+        self.current_frame_mut()?.next_instruction()
+    }
+
+    pub fn constant(&self, index: usize) -> Value {
+        // This unwrap is safe as we do not process constants without having an instruction
+        // and thus a frame
+        self.current_frame().unwrap().constant(index)
+    }
+
+    pub fn fetch_constant_name(&self, index: usize) -> Result<String, InterpretErrors> {
+        // This unwrap is safe as we do not process constants without having an instruction
+        // and thus a frame
+        self.current_frame().unwrap().fetch_constant_name(index)
+    }
+
+    fn current_ip_mut(&mut self) -> &mut usize {
+        // This unwrap is safe as we do not process constants without having an instruction
+        // and thus a frame
+        &mut self.current_frame_mut().unwrap().ip
+    }
+
+    fn interpret_frame(&mut self, starting_frame: Frame) -> Result<(), InterpretErrors> {
+        self.frames.push(starting_frame);
 
         loop {
-            let Some(frame) = self.frames.last_mut() else {
+            let Some(instruction) = self.move_to_next_instruction() else {
                 return Ok(());
             };
 
-            let Some(instruction) = frame.next_instruction() else {
-                return Ok(());
-            };
-
-            trace!(?instruction, frame = ?frame, "Interpreting");
+            trace!(?instruction, frame = ?self.current_frame(), "Interpreting");
 
             match instruction {
                 Instruction::Return => {}
                 Instruction::Constant { index } => {
-                    let constant = frame.constant(index as usize);
+                    let constant = self.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
 
-                    frame.push(constant);
+                    self.push(constant);
                 }
                 Instruction::LongConstant { index } => {
-                    let constant = frame.constant(index as usize);
+                    let constant = self.constant(index as usize);
                     debug!(value = %constant, "Interpreted constant");
 
-                    frame.push(constant);
+                    self.push(constant);
                 }
                 Instruction::Negate => {
-                    let v = frame.pop_double()?;
-                    frame.push(Value::Double(-v));
+                    let v = self.pop_double()?;
+                    self.push(Value::Double(-v));
                 }
                 Instruction::Add => {
-                    let b = frame.pop()?;
-                    let a = frame.pop()?;
+                    let b = self.pop()?;
+                    let a = self.pop()?;
                     match (a, b) {
                         (Value::Double(a), Value::Double(b)) => {
-                            frame.push(Value::Double(a + b));
+                            self.push(Value::Double(a + b));
                         }
                         (Value::String(a), Value::String(b)) => {
-                            frame.push(Value::String(a + &b));
+                            self.push(Value::String(a + &b));
                         }
                         _ => return Err(InterpretErrors::InvalidRuntimeType),
                     }
                 }
                 Instruction::Subtract => {
-                    let b = frame.pop_double()?;
-                    let a = frame.pop_double()?;
-                    frame.push(Value::Double(a - b));
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.push(Value::Double(a - b));
                 }
                 Instruction::Multiply => {
-                    let b = frame.pop_double()?;
-                    let a = frame.pop_double()?;
-                    frame.push(Value::Double(a * b));
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.push(Value::Double(a * b));
                 }
                 Instruction::Divide => {
-                    let b = frame.pop_double()?;
-                    let a = frame.pop_double()?;
-                    frame.push(Value::Double(a / b));
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.push(Value::Double(a / b));
                 }
                 Instruction::Not => {
-                    let a = frame.pop_falsey()?;
-                    frame.push(Value::Bool(a));
+                    let a = self.pop_falsey()?;
+                    self.push(Value::Bool(a));
                 }
                 Instruction::Equal => {
-                    let a = frame.pop()?;
-                    let b = frame.pop()?;
-                    frame.push(Value::Bool(a == b));
+                    let a = self.pop()?;
+                    let b = self.pop()?;
+                    self.push(Value::Bool(a == b));
                 }
                 Instruction::Greater => {
-                    let b = frame.pop_double()?;
-                    let a = frame.pop_double()?;
-                    frame.push(Value::Bool(a > b));
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.push(Value::Bool(a > b));
                 }
                 Instruction::Less => {
-                    let b = frame.pop_double()?;
-                    let a = frame.pop_double()?;
-                    frame.push(Value::Bool(a < b));
+                    let b = self.pop_double()?;
+                    let a = self.pop_double()?;
+                    self.push(Value::Bool(a < b));
                 }
                 Instruction::Print => {
-                    let a = frame.pop()?;
+                    let a = self.pop()?;
                     if self.settings.capture_prints {
                         self.captured_prints.push(format!("{a}"));
                     } else {
@@ -159,47 +211,47 @@ impl VM {
                     }
                 }
                 Instruction::Pop => {
-                    let _ = frame.pop()?;
+                    let _ = self.pop()?;
                 }
                 Instruction::DefineGlobal { name_index } => {
-                    let name = frame.fetch_constant_name(name_index as usize)?;
-                    let value = frame.pop()?;
+                    let name = self.fetch_constant_name(name_index as usize)?;
+                    let value = self.pop()?;
                     self.globals.insert(name, value);
                 }
                 Instruction::FetchGlobal { name_index } => {
-                    let name = frame.fetch_constant_name(name_index as usize)?;
+                    let name = self.fetch_constant_name(name_index as usize)?;
                     match self.globals.get(&name) {
                         Some(value) => {
-                            frame.push(value.clone());
+                            self.push(value.clone());
                         }
                         None => return Err(InterpretErrors::UndefinedVariable(name)),
                     }
                 }
                 Instruction::SetGlobal { name_index } => {
-                    let name = frame.fetch_constant_name(name_index as usize)?;
+                    let name = self.fetch_constant_name(name_index as usize)?;
                     if !self.globals.contains_key(&name) {
                         return Err(InterpretErrors::UndefinedVariable(name));
                     }
-                    let value = frame.peek()?.clone();
+                    let value = self.peek()?.clone();
                     self.globals.insert(name, value);
                 }
                 Instruction::SetLocal { index } => {
-                    let value = frame.peek()?.clone();
-                    frame.stack[index as usize] = value;
+                    let value = self.peek()?.clone();
+                    self.stack[index as usize] = value;
                 }
                 Instruction::GetLocal { index } => {
-                    frame.stack.push(frame.stack[index as usize].clone());
+                    self.stack.push(self.stack[index as usize].clone());
                 }
                 Instruction::JumpIfFalse { offset } => {
-                    if frame.peek_falsey()? {
-                        frame.ip += offset as usize;
+                    if self.peek_falsey()? {
+                        *self.current_ip_mut() += offset as usize;
                     }
                 }
                 Instruction::Jump { offset } => {
-                    frame.ip += offset as usize;
+                    *self.current_ip_mut() += offset as usize;
                 }
                 Instruction::JumpBack { offset } => {
-                    frame.ip -= offset as usize;
+                    *self.current_ip_mut() -= offset as usize;
                 }
                 Instruction::Call { arg_count } => {
                     todo!()
@@ -219,6 +271,22 @@ mod tests {
     };
 
     use super::{Function, VMSettings, VM};
+
+    #[test]
+    fn falsey() {
+        let mut vm = VM::new();
+
+        vm.stack.push(Value::Double(1.2));
+        vm.stack.push(Value::Double(0.0));
+        vm.stack.push(Value::Nil);
+        vm.stack.push(Value::Bool(true));
+        vm.stack.push(Value::Bool(false));
+        assert!(vm.pop_falsey().unwrap());
+        assert!(!vm.pop_falsey().unwrap());
+        assert!(vm.pop_falsey().unwrap());
+        assert!(!vm.pop_falsey().unwrap());
+        assert!(!vm.pop_falsey().unwrap());
+    }
 
     #[test]
     fn executes_return_zero() {
@@ -247,7 +315,7 @@ mod tests {
 
         let mut vm = VM::new();
         vm.interpret(function).unwrap();
-        assert_eq!(vm.frames[0].stack[0], Value::Double(-0.8214285714285714));
+        assert_eq!(vm.stack[0], Value::Double(-0.8214285714285714));
     }
 
     #[rstest]
@@ -262,7 +330,7 @@ mod tests {
 
         let mut vm = VM::new();
         vm.interpret(function).unwrap();
-        assert_eq!(vm.frames[0].stack[0], Value::Bool(!input));
+        assert_eq!(vm.stack[0], Value::Bool(!input));
     }
 
     #[test]
@@ -275,7 +343,7 @@ mod tests {
 
         let mut vm = VM::new();
         vm.interpret(function).unwrap();
-        assert_eq!(vm.frames[0].stack[0], Value::Bool(true));
+        assert_eq!(vm.stack[0], Value::Bool(true));
     }
 
     #[test]
@@ -307,10 +375,11 @@ mod tests {
         chunk.write(Instruction::DefineGlobal { name_index }, 123);
 
         let function = Function::new_script(chunk);
-        let mut frame = Frame::new(function);
-        frame.stack.push(Value::Double(42.0));
+        let frame = Frame::new(function);
 
         let mut vm = VM::new();
+        vm.stack.push(Value::Double(42.0));
+
         vm.interpret_frame(frame).unwrap();
         assert_eq!(vm.globals["asdf"], Value::Double(42.0));
     }
@@ -327,7 +396,7 @@ mod tests {
         let mut vm = VM::new();
         vm.globals.insert("asdf".to_string(), Value::Double(42.0));
         vm.interpret(function).unwrap();
-        assert_eq!(vm.frames[0].pop().unwrap(), Value::Double(42.0));
+        assert_eq!(vm.pop().unwrap(), Value::Double(42.0));
     }
 
     #[test]
@@ -352,15 +421,15 @@ mod tests {
         chunk.write(Instruction::SetGlobal { name_index }, 123);
 
         let function = Function::new_script(chunk);
-        let mut frame = Frame::new(function);
-
-        frame.stack.push(Value::Double(12.0));
-        frame.stack.push(Value::Double(42.0));
+        let frame = Frame::new(function);
 
         let mut vm = VM::new();
+        vm.stack.push(Value::Double(12.0));
+        vm.stack.push(Value::Double(42.0));
+
         vm.interpret_frame(frame).unwrap();
         assert_eq!(*vm.globals.get(&"asdf".to_string()).unwrap(), Value::Double(12.0));
-        assert_eq!(1, vm.frames[0].stack.len());
+        assert_eq!(1, vm.stack.len());
     }
 
     #[test]
@@ -373,19 +442,19 @@ mod tests {
 
         let function = Function::new_script(chunk);
 
-        let mut frame = Frame::new(function);
-        // The starting value of our local
-        frame.stack.push(Value::Double(42.0));
-        // The new value
-        frame.stack.push(Value::Double(12.0));
+        let frame = Frame::new(function);
 
         let mut vm = VM::new();
+        // The starting value of our local
+        vm.stack.push(Value::Double(42.0));
+        // The new value
+        vm.stack.push(Value::Double(12.0));
 
         vm.interpret_frame(frame).unwrap();
 
-        assert_eq!(2, vm.frames[0].stack.len());
-        assert_eq!(Value::Double(12.0), vm.frames[0].stack[0]);
-        assert_eq!(Value::Double(12.0), vm.frames[0].stack[1]);
+        assert_eq!(2, vm.stack.len());
+        assert_eq!(Value::Double(12.0), vm.stack[0]);
+        assert_eq!(Value::Double(12.0), vm.stack[1]);
     }
 
     #[test]

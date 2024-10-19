@@ -354,7 +354,6 @@ version = "0.1.0"
 dependencies = [
  "eyre",
  "rstest",
- "smallvec",
  "thiserror",
  "tracing",
  "tracing-subscriber",
