@@ -200,6 +200,16 @@ first();
 print noReturn();",
     "nil"
 )]
+#[case(
+    "fun f() { return 42.0; }
+print f();",
+    "42"
+)]
+#[case(
+    "fun f() { return 42.0; }
+print f() + f();",
+    "84"
+)]
 fn small_programs_end_to_end(#[case] source: String, #[case] expected: String) {
     println!("{}", source);
 

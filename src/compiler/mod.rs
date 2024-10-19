@@ -24,6 +24,7 @@ pub fn compile(source: &str) -> eyre::Result<Function> {
 
 mod locals;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum FunctionType {
     Function,
     Script,
@@ -242,9 +243,14 @@ impl Compiler {
     }
 
     fn end_compile(&mut self, parser: &mut Parser) -> eyre::Result<Function> {
+        self.emit_return(parser)?;
+        Ok(std::mem::take(&mut self.function))
+    }
+
+    fn emit_return(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         self.function.chunk.write_constant(Value::Nil, parser.current.line);
         self.function.chunk.write(Instruction::Return, parser.current.line);
-        Ok(std::mem::take(&mut self.function))
+        Ok(())
     }
 
     pub fn current_chunk(&mut self) -> &mut Chunk {
@@ -277,10 +283,6 @@ impl Compiler {
     fn try_compile(&mut self, parser: &mut Parser) -> eyre::Result<()> {
         self.declaration(parser)?;
         Ok(())
-    }
-
-    fn emit_return(&mut self, line: u32) {
-        self.current_chunk().write(Instruction::Return, line);
     }
 
     fn emit_constant(&mut self, value: Value, line: u32) {
@@ -530,6 +532,8 @@ impl Compiler {
             self.if_statement(parser)?;
         } else if self.match_token(parser, TokenType::For)? {
             self.for_statement(parser)?;
+        } else if self.match_token(parser, TokenType::Return)? {
+            self.return_statement(parser)?;
         } else if self.match_token(parser, TokenType::While)? {
             self.while_statement(parser)?;
         } else if self.match_token(parser, TokenType::LeftBrace)? {
@@ -562,6 +566,21 @@ impl Compiler {
         }
 
         self.consume(parser, TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(())
+    }
+
+    fn return_statement(&mut self, parser: &mut Parser) -> eyre::Result<()> {
+        if self.function_type == FunctionType::Script {
+            return Err(eyre::eyre!("Can't return from top-level code."));
+        }
+
+        if self.match_token(parser, TokenType::Semicolon)? {
+            self.emit_return(parser)?;
+        } else {
+            self.expression(parser)?;
+            self.consume(parser, TokenType::Semicolon, "Expect ';' after return value.")?;
+            self.function.chunk.write(Instruction::Return, parser.current.line);
+        }
         Ok(())
     }
 
@@ -837,6 +856,7 @@ mod tests {
   var a = \"second\";
 }"
     )]
+    #[case("return 0;")]
     fn compile_fails(#[case] input: String) {
         let mut compiler = Compiler::new();
         assert!(compiler.compile(&input).is_err());
