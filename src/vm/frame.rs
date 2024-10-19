@@ -6,12 +6,17 @@ use super::{Function, InterpretErrors};
 pub struct Frame {
     pub function: Function,
     pub ip: usize,
+    pub stack_offset: usize,
 }
 
 impl Frame {
     pub fn new(function: Function) -> Self {
         {
-            Self { function, ip: 0 }
+            Self {
+                function,
+                ip: 0,
+                stack_offset: 0,
+            }
         }
     }
 

@@ -109,6 +109,7 @@ impl VM {
         self.current_frame_mut()?.next_instruction()
     }
 
+    // TODO - Get rid of these
     pub fn constant(&self, index: usize) -> Value {
         // This unwrap is safe as we do not process constants without having an instruction
         // and thus a frame
@@ -119,6 +120,12 @@ impl VM {
         // This unwrap is safe as we do not process constants without having an instruction
         // and thus a frame
         self.current_frame().unwrap().fetch_constant_name(index)
+    }
+
+    pub fn frame_stack_offset(&self) -> usize {
+        // This unwrap is safe as we do not process constants without having an instruction
+        // and thus a frame
+        self.current_frame().unwrap().stack_offset
     }
 
     fn current_ip_mut(&mut self) -> &mut usize {
@@ -237,10 +244,13 @@ impl VM {
                 }
                 Instruction::SetLocal { index } => {
                     let value = self.peek()?.clone();
-                    self.stack[index as usize] = value;
+                    let frame_stack_offset = self.frame_stack_offset();
+                    self.stack[frame_stack_offset + index as usize] = value;
                 }
                 Instruction::GetLocal { index } => {
-                    self.stack.push(self.stack[index as usize].clone());
+                    let frame_stack_offset = self.frame_stack_offset();
+                    let value = self.stack[frame_stack_offset + index as usize].clone();
+                    self.stack.push(value);
                 }
                 Instruction::JumpIfFalse { offset } => {
                     if self.peek_falsey()? {
@@ -455,6 +465,37 @@ mod tests {
         assert_eq!(2, vm.stack.len());
         assert_eq!(Value::Double(12.0), vm.stack[0]);
         assert_eq!(Value::Double(12.0), vm.stack[1]);
+    }
+
+    #[test]
+    fn locals_nested_frames() {
+        let mut chunk = Chunk::new();
+
+        chunk.write(Instruction::SetLocal { index: 0 }, 123);
+        chunk.write(Instruction::Pop, 123);
+        chunk.write(Instruction::GetLocal { index: 0 }, 123);
+
+        let function = Function::new_script(chunk);
+
+        let mut vm = VM::new();
+
+        let mut frame = Frame::new(function);
+        frame.stack_offset = 1;
+
+        // This is the variable from the previous frame
+        vm.stack.push(Value::Nil);
+
+        // The starting value of our local
+        vm.stack.push(Value::Double(42.0));
+        // The new value
+        vm.stack.push(Value::Double(12.0));
+
+        vm.interpret_frame(frame).unwrap();
+
+        assert_eq!(3, vm.stack.len());
+        assert_eq!(Value::Nil, vm.stack[0]);
+        assert_eq!(Value::Double(12.0), vm.stack[1]);
+        assert_eq!(Value::Double(12.0), vm.stack[2]);
     }
 
     #[test]
