@@ -75,10 +75,23 @@ impl Chunk {
 
 impl Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("\n")?;
+        f.write_str("Code:\n")?;
         for (offset, instruction) in self.code.iter().enumerate() {
             instruction.disassemble(f, offset as u32, self)?;
             f.write_str("\n")?;
+        }
+        f.write_str("\nConstants:\n")?;
+        for (offset, constant) in self.constants.iter().enumerate() {
+            match constant {
+                Value::Function(func) => {
+                    f.write_fmt(format_args!("{offset} Function {:?}", func.name))?;
+                    let func_text = format!("{}", func.chunk);
+                    f.write_fmt(format_args!("{}\n", indent::indent_by(4, func_text)))?;
+                }
+                _ => {
+                    f.write_fmt(format_args!("{offset} - {}\n", constant))?;
+                }
+            }
         }
         Ok(())
     }
