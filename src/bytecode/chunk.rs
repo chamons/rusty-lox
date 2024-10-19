@@ -121,7 +121,7 @@ mod tests {
         let output = chunk.to_string();
         // println!("{output}");
 
-        const EXPECTED: &str = "
+        const EXPECTED: &str = "Code:
    0  123 OP_CONSTANT 0 '1.2'
    1  124 OP_LONG_CONSTANT 1 '12.2'
    2  125 OP_ADD
@@ -129,6 +129,13 @@ mod tests {
    4    | OP_CONSTANT 4 '3'
    5    | OP_DEFINE_GLOBAL (asdf)
    6  126 OP_RETURN
+
+Constants:
+0 - 1.2
+1 - 12.2
+2 - asdf
+3 - 1
+4 - 3
 ";
         assert_eq!(output, EXPECTED);
     }
