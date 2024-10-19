@@ -246,3 +246,14 @@ fn small_programs_that_error(#[case] source: String, #[case] expected_error: Int
     let runtime_error = vm.interpret(function).unwrap_err();
     assert_eq!(runtime_error, expected_error);
 }
+
+#[test]
+fn clock() {
+    let function = compile("print clock();").unwrap();
+
+    let mut vm = VM::new_from_settings(VMSettings::test_default());
+
+    vm.interpret(function).unwrap();
+    assert_eq!(1, vm.captured_prints.len());
+    assert!(vm.captured_prints[0].parse::<f64>().is_ok());
+}

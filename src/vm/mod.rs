@@ -1,9 +1,13 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use thiserror::Error;
 use tracing::{debug, trace};
 
-use crate::bytecode::{Instruction, Value};
+use crate::bytecode::{Instruction, NativeFunctionKind, Value};
 
 mod frame;
 pub use frame::Frame;
@@ -65,10 +69,13 @@ impl VM {
     }
 
     pub fn new_from_settings(settings: VMSettings) -> Self {
+        let mut globals = HashMap::new();
+        globals.insert("clock".to_string(), Value::NativeFunction(NativeFunctionKind::Clock));
+
         VM {
             frames: vec![],
             stack: vec![],
-            globals: HashMap::new(),
+            globals,
             settings,
             captured_prints: vec![],
         }
@@ -275,20 +282,26 @@ impl VM {
                         .get(self.stack.len() - arg_count as usize - 1)
                         .ok_or(InterpretErrors::PoppedEndOfStack)?;
 
-                    let function = match function {
-                        Value::Function(v) => Ok(v),
-                        _ => Err(InterpretErrors::InvalidRuntimeType),
-                    }?;
+                    match function {
+                        Value::Function(function) => {
+                            if function.arity != arg_count {
+                                return Err(InterpretErrors::IncorrectArgumentCount(function.arity, arg_count));
+                            }
 
-                    if function.arity != arg_count {
-                        return Err(InterpretErrors::IncorrectArgumentCount(function.arity, arg_count));
-                    }
-
-                    self.frames.push(Frame {
-                        function: function.clone(),
-                        ip: 0,
-                        stack_offset: self.stack.len() - arg_count as usize,
-                    });
+                            self.frames.push(Frame {
+                                function: function.clone(),
+                                ip: 0,
+                                stack_offset: self.stack.len() - arg_count as usize,
+                            });
+                        }
+                        Value::NativeFunction(v) => match v {
+                            NativeFunctionKind::Clock => {
+                                let seconds = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64();
+                                self.push(Value::Double(seconds));
+                            }
+                        },
+                        _ => return Err(InterpretErrors::InvalidRuntimeType),
+                    };
                 }
             }
         }
@@ -302,7 +315,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::{
-        bytecode::{Chunk, Instruction, Value},
+        bytecode::{Chunk, Instruction, NativeFunctionKind, Value},
         vm::{Frame, InterpretErrors},
     };
 
@@ -629,5 +642,21 @@ mod tests {
             })
             .unwrap_err();
         assert_eq!(InterpretErrors::IncorrectArgumentCount(1, 0), error);
+    }
+
+    #[test]
+    fn native_clock() {
+        let mut chunk = Chunk::new();
+
+        chunk.write_constant(Value::NativeFunction(NativeFunctionKind::Clock), 124);
+        chunk.write(Instruction::Call { arg_count: 0 }, 124);
+        chunk.write(Instruction::Print, 124);
+
+        let function = Function::new_script(chunk);
+
+        let mut vm = VM::new_from_settings(VMSettings::test_default());
+        vm.interpret(function).unwrap();
+        assert_eq!(1, vm.captured_prints.len());
+        assert!(vm.captured_prints[0].parse::<f64>().is_ok());
     }
 }

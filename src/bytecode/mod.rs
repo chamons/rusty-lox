@@ -81,6 +81,20 @@ pub enum Value {
     Nil,
     String(String),
     Function(Arc<Function>),
+    NativeFunction(NativeFunctionKind),
+}
+
+#[derive(Debug, Clone)]
+pub enum NativeFunctionKind {
+    Clock,
+}
+
+impl Display for NativeFunctionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NativeFunctionKind::Clock => f.write_fmt(format_args!("Native Function - Clock")),
+        }
+    }
 }
 
 impl Value {
@@ -90,6 +104,7 @@ impl Value {
             Value::Bool(v) => !v,
             Value::Nil => true,
             Value::Function(_) => false,
+            Value::NativeFunction(_) => false,
         }
     }
 }
@@ -102,6 +117,7 @@ impl Display for Value {
             Value::Nil => f.write_fmt(format_args!("nil")),
             Value::String(v) => f.write_fmt(format_args!("{v}")),
             Value::Function(v) => f.write_fmt(format_args!("{v}")),
+            Value::NativeFunction(v) => f.write_fmt(format_args!("{v}")),
         }
     }
 }
