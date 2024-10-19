@@ -1,34 +1,28 @@
 # rusty-lox
 
-This is an implementation of lox in rust through chapter 11 of [the book](https://craftinginterpreters.com/functions.html).
+This is an implementation of lox in rust through chapter 24 of [the book](https://craftinginterpreters.com/functions.html).
 
 It contains:
 - User declared functions, with recursion
 - Built in timing function
 - Basic addition and order of operation
 
-with a recursive descent parser from the book ported from Java to Rust.
+with a bytecode compiler from the book ported from C to Rust.
 
 ## Show Me
 
 ```
-$ cat fib.lox 
+% cat data/fib.lox                   
 fun fib(n) {
-    if (n <= 1) return n;
-    return fib(n - 2) + fib(n - 1);
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
 }
+
 var start = clock();
-print "fib(30):";
-print fib(30);
-var end = clock();
-print "Time:";
-print end - start;
+print fib(35);
+print clock() - start;
 
-$ cargo run --release fib.lox
-fib(30):
-832040
-Time:
-15.474133014678955
+% cargo run -q --release -- data/fib.lox
+9227465
+3.6996841430664063
 ```
-
-This was a solo hackathon project for the year.
