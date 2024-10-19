@@ -1,1 +1,2 @@
+- Make sure the REPL keeps state between lines
 - Fix line numbers in errors

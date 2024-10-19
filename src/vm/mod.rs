@@ -201,6 +201,9 @@ impl VM {
                 Instruction::JumpBack { offset } => {
                     frame.ip -= offset as usize;
                 }
+                Instruction::Call { arg_count } => {
+                    todo!()
+                }
             }
         }
     }

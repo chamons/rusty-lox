@@ -32,6 +32,7 @@ pub enum Instruction {
     JumpIfFalse { offset: u32 },
     Jump { offset: u32 },
     JumpBack { offset: u32 },
+    Call { arg_count: u32 },
 }
 
 impl Instruction {
@@ -68,6 +69,7 @@ impl Instruction {
             Instruction::JumpIfFalse { offset } => f.write_fmt(format_args!("OP_JUMP_IF_FALSE ({offset})")),
             Instruction::Jump { offset } => f.write_fmt(format_args!("OP_JUMP ({offset})")),
             Instruction::JumpBack { offset } => f.write_fmt(format_args!("OP_JUMP_BACK ({offset})")),
+            Instruction::Call { arg_count } => f.write_fmt(format_args!("OP_CALL ({arg_count})")),
         }
     }
 }

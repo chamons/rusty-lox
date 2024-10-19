@@ -74,8 +74,8 @@ fn get_parse_rule(token_type: &TokenType) -> ParseRule {
     match token_type {
         TokenType::LeftParen => ParseRule {
             prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.grouping(p, can_assign)),
-            infix: None,
-            precedence: Precedence::None,
+            infix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.call(p, can_assign)),
+            precedence: Precedence::Call,
         },
         TokenType::Minus => ParseRule {
             prefix: Some(|c: &mut Compiler, p: &mut Parser, can_assign: bool| c.unary(p, can_assign)),
@@ -201,15 +201,20 @@ pub struct Compiler {
 
 impl Compiler {
     pub fn new() -> Self {
-        Self::new_from_type(FunctionType::Script)
-    }
-
-    pub fn new_from_type(function_type: FunctionType) -> Self {
         Self {
             function: Function::new(),
             locals: vec![],
             scope_depth: 0,
-            function_type,
+            function_type: FunctionType::Script,
+        }
+    }
+
+    pub fn new_for_function(name: String) -> Self {
+        Self {
+            function: Function::new_with_name(name),
+            locals: vec![],
+            scope_depth: 0,
+            function_type: FunctionType::Function,
         }
     }
 
@@ -343,6 +348,27 @@ impl Compiler {
         Ok(())
     }
 
+    fn call(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
+        let arg_count = self.argument_list(parser)?;
+        self.current_chunk().write(Instruction::Call { arg_count }, parser.previous.line);
+        Ok(())
+    }
+
+    fn argument_list(&mut self, parser: &mut Parser) -> eyre::Result<u32> {
+        let mut count = 0;
+        if parser.current.token_type != TokenType::RightParen {
+            loop {
+                self.expression(parser)?;
+                count += 1;
+                if !self.match_token(parser, TokenType::Comma)? {
+                    break;
+                }
+            }
+        }
+        self.consume(parser, TokenType::RightParen, "Expect ')' after arguments.")?;
+        Ok(count)
+    }
+
     fn unary(&mut self, parser: &mut Parser, _can_assign: bool) -> eyre::Result<()> {
         let operator_type = parser.previous.token_type.clone();
 
@@ -368,14 +394,36 @@ impl Compiler {
     }
 
     fn function(&mut self, parser: &mut Parser) -> eyre::Result<()> {
-        let mut compiler = Compiler::new();
+        let function_name = match &parser.previous.token_type {
+            TokenType::Identifier(identifier) => Ok(identifier.clone()),
+            _ => Err(eyre::eyre!("Unable to find function name defined")),
+        }?;
+
+        let mut compiler = Compiler::new_for_function(function_name);
+
         compiler.begin_scope();
         compiler.consume(parser, TokenType::LeftParen, "Expect '(' after function name.")?;
+
+        if parser.current.token_type != TokenType::RightParen {
+            loop {
+                compiler.function.arity += 1;
+                if compiler.function.arity > 255 {
+                    return Err(eyre::eyre!("Can't have more than 255 parameters."));
+                }
+                let variable_info = compiler.parse_variable(parser)?;
+                compiler.define_variable(parser, &variable_info)?;
+                if !compiler.match_token(parser, TokenType::Comma)? {
+                    break;
+                }
+            }
+        }
+
         compiler.consume(parser, TokenType::RightParen, "Expect ')' after parameters.")?;
-        compiler.consume(parser, TokenType::LeftParen, "Expect '{' before function body.")?;
+        compiler.consume(parser, TokenType::LeftBrace, "Expect '{' before function body.")?;
         compiler.block(parser)?;
 
         let function = compiler.end_compile(parser)?;
+
         self.current_chunk()
             .write_constant(Value::Function(std::sync::Arc::new(function)), parser.previous.line);
 
@@ -758,14 +806,19 @@ mod tests {
     #[case("{ var x = 42; }")]
     #[case(
         "{
-  var a = \"outer\";
-  {
-    var a = \"inner\";
-  }
-}"
+      var a = \"outer\";
+      {
+        var a = \"inner\";
+      }
+    }"
     )]
+    #[case("fun f () {}")]
+    #[case("fun f (a) {}")]
+    #[case("fun f (a, b) {}")]
+    #[case("fun f(b) {} f(1);")]
     fn compile_expected(#[case] input: String) {
         let mut compiler = Compiler::new();
+        println!("{input}");
         compiler.compile(&input).unwrap();
     }
 
